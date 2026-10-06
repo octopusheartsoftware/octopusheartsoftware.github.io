@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Consensus Poll</title>
+<script>
+/* =====================================================================
+   SETUP: paste your two Supabase values here (see SETUP-GUIDE).
+   ===================================================================== */
+const SUPABASE_URL = 'https://xvwqwlbswjkwkdoqwpoa.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_wCPXRAl9A_-EtM6bi-9KzA_-ollQMkt';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#f3f6fb; --card:#fff; --ink:#2b2f36; --muted:#6b7380; --line:#a9c3ee; --blue:#4f86d9;
+    --blue-dark:#2f64b5; --green:#3f9b5a; --green-soft:#e6f4ea; --green-line:#a8d5b3;
+    --red:#c94a4a; --red-soft:#fbe9e9; --red-line:#e6a3a3; --amber:#b7791f; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+  body{min-height:100vh;padding:16px 16px 40px}
+  .wrap{max-width:460px;margin:0 auto}
+  .wrap.wide{max-width:960px}
+  h1{font-size:1.5rem;margin:.2em 0 .1em}
+  h2{font-size:1.15rem;margin:1.4em 0 .6em}
+  .sub{color:var(--muted);font-size:.92rem;margin:0 0 1rem}
+  .card{background:var(--card);border:2px solid var(--line);border-radius:var(--radius);padding:18px;margin:14px 0}
+  .title-box{border:2px solid var(--line);border-radius:14px;background:#fff;text-align:center;padding:14px 10px;
+    font-size:1.35rem;font-weight:600;margin:6px 0 14px}
+  .btn{display:block;width:100%;font:inherit;font-size:1.1rem;padding:15px 14px;border-radius:14px;cursor:pointer;
+    border:2px solid var(--line);background:#fff;color:var(--ink);margin:12px 0;text-align:center;text-decoration:none;
+    transition:background .12s,border-color .12s,transform .05s}
+  .btn:hover{border-color:var(--blue)}
+  .btn:active{transform:scale(.99)}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  .btn.primary:hover{background:var(--blue-dark);border-color:var(--blue-dark)}
+  .btn.big{padding:26px 14px;font-size:1.35rem}
+  .btn.danger{background:var(--red);border-color:var(--red);color:#fff;font-weight:700}
+  .btn.small{display:inline-block;width:auto;font-size:.9rem;padding:8px 12px;margin:4px 4px 4px 0}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .row{display:flex;gap:12px}
+  .row>*{flex:1}
+  input[type=text],textarea{width:100%;font:inherit;font-size:1.05rem;padding:12px 14px;border:2px solid var(--line);
+    border-radius:14px;background:#fff;color:var(--ink)}
+  input[type=text]:focus,textarea:focus{outline:none;border-color:var(--blue)}
+  textarea{min-height:170px;resize:vertical;border-radius:28px;padding:18px;font-size:1.2rem;line-height:1.35}
+  .counter{text-align:center;color:var(--muted);font-size:.9rem;margin:6px 0}
+  .counter.low{color:var(--red)}
+  .hint{color:var(--muted);font-size:.88rem;text-align:center;margin:4px 0 10px}
+  .statement{border:2px solid var(--line);border-radius:28px;background:#fff;padding:20px;font-size:1.3rem;line-height:1.35;
+    min-height:150px;display:flex;flex-direction:column;justify-content:center;word-wrap:break-word}
+  .badge{display:inline-block;font-size:.75rem;font-weight:600;padding:3px 9px;border-radius:999px;background:#eef3fb;color:var(--blue-dark);
+    margin-bottom:8px;align-self:flex-start}
+  .choice{font:inherit;font-size:1.2rem;padding:14px 8px;border-radius:14px;background:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;min-height:58px}
+  .choice.g{border:2px solid var(--green-line)} .choice.r{border:2px solid var(--red-line)}
+  .choice.g.on{background:var(--green);border-color:var(--green);color:#fff}
+  .choice.r.on{background:var(--red);border-color:var(--red);color:#fff}
+  .choice svg{width:34px;height:34px}
+  .q-label{text-align:center;color:var(--muted);font-size:.9rem;margin:12px 0 6px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2b2f36;color:#fff;padding:12px 18px;
+    border-radius:12px;font-size:.95rem;max-width:90vw;z-index:50;box-shadow:0 6px 24px rgba(0,0,0,.2);text-align:center}
+  .toast.err{background:var(--red)}
+  .center{text-align:center}
+  .muted{color:var(--muted)}
+  .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:700;font-size:.9rem;white-space:nowrap}
+  .pill.agree{background:var(--green-soft);color:var(--green)} .pill.disagree{background:var(--red-soft);color:var(--red)}
+  .result{display:flex;gap:12px;align-items:center;background:#fff;border:2px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+  .result .txt{flex:1;line-height:1.35}
+  .codechip{display:inline-block;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.12em;font-weight:700;
+    background:#eef3fb;color:var(--blue-dark);padding:3px 9px;border-radius:8px}
+  .status{display:inline-block;font-size:.8rem;font-weight:700;padding:4px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em}
+  .status.setup{background:#fff4e0;color:var(--amber)} .status.live{background:var(--green-soft);color:var(--green)}
+  .status.ended{background:#eceff3;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:820px){.grid{grid-template-columns:300px 1fr}}
+  .stat{font-size:2rem;font-weight:700;line-height:1}
+  .stats{display:flex;gap:22px;margin:6px 0}
+  .stats .muted{font-size:.85rem}
+  .qrow{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid #e3e9f3}
+  .qrow:first-child{border-top:none}
+  .qrow .rank{font-weight:700;color:var(--blue-dark);min-width:28px}
+  .qrow .body{flex:1;line-height:1.35}
+  .qrow .meta{font-size:.82rem;color:var(--muted);margin-top:5px}
+  .bar{height:6px;background:#e6ecf5;border-radius:6px;margin-top:6px;overflow:hidden;max-width:260px}
+  .bar>span{display:block;height:100%;background:var(--blue)}
+  .xbtn{border:1px solid var(--red-line);background:#fff;color:var(--red);border-radius:10px;padding:6px 10px;cursor:pointer;font:inherit;font-size:.85rem}
+  #qr{display:flex;justify-content:center;margin:10px 0}
+  #qr img,#qr canvas{border:8px solid #fff;border-radius:8px}
+  .linkbox{font-size:.82rem;word-break:break-all;background:#f3f6fb;border-radius:10px;padding:8px 10px;margin:6px 0}
+  .warn{background:#fff8e6;border:1px solid #f0d58c;border-radius:12px;padding:10px 12px;font-size:.88rem;margin:10px 0}
+  details summary{cursor:pointer;font-weight:600;margin:6px 0}
+  .empty{color:var(--muted);text-align:center;padding:18px 6px}
+  .spinner{width:28px;height:28px;border:3px solid #d5e1f3;border-top-color:var(--blue);border-radius:50%;
+    animation:spin 1s linear infinite;margin:20px auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #print-area{display:none}
+  @media print{
+    body{background:#fff;padding:0}
+    #app,.toast{display:none!important}
+    #print-area{display:block;font-family:Georgia,serif;color:#000}
+    #print-area h1{font-size:22pt;margin:0 0 4pt}
+    #print-area .meta{color:#444;margin-bottom:14pt}
+    #print-area .pr{display:flex;gap:14pt;padding:8pt 0;border-bottom:1px solid #ccc;page-break-inside:avoid}
+    #print-area .pr .t{flex:1}
+    #print-area .pr .p{font-weight:bold;white-space:nowrap}
+  }
+</style>
+</head>
+<body>
+<div id="app"><div class="spinner"></div></div>
+<div id="print-area"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- basics ---------- */
+const $app = document.getElementById('app');
+const params = new URLSearchParams(location.search);
+const MAXLEN = 170;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const baseUrl = () => location.origin + location.pathname;
+
+function toast(msg, isErr) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast' + (isErr ? ' err' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), isErr ? 4500 : 2500);
+}
+
+function store(key, val) {
+  try { if (val === undefined) return JSON.parse(localStorage.getItem(key)); localStorage.setItem(key, JSON.stringify(val)); }
+  catch { return null; }
+}
+
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+// Anonymous ID for this phone/browser
+let PID = store('cp_pid');
+if (!PID) { PID = uuid(); store('cp_pid', PID); }
+
+/* ---------- backend ---------- */
+const configured = !SUPABASE_URL.startsWith('PASTE') && !SUPABASE_KEY.startsWith('PASTE');
+const sb = configured && window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+async function rpc(fn, args) {
+  const { data, error } = await sb.rpc(fn, args);
+  if (error) {
+    const msg = error.message || 'Something went wrong.';
+    throw new Error(/fetch|network/i.test(msg) ? 'Could not reach the server. Check your connection.' : msg);
+  }
+  return data;
+}
+
+/* ---------- repeating refresh (pauses when the tab is hidden) ---------- */
+let timer = null;
+function every(ms, fn) {
+  stopTimer();
+  const tick = async () => {
+    if (!document.hidden) { try { await fn(); } catch (e) { /* quiet retry */ } }
+    timer = setTimeout(tick, ms);
+  };
+  timer = setTimeout(tick, ms);
+}
+function stopTimer() { if (timer) clearTimeout(timer); timer = null; }
+
+/* ---------- shared bits ---------- */
+const thumb = down => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+  ${down ? 'style="transform:rotate(180deg)"' : ''}><path d="M7 10v11H3V10h4z"/><path d="M7 10l4-8c1.7 0 3 1.3 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.1 21H7"/></svg>`;
+
+function counterHtml(len) {
+  const left = MAXLEN - len;
+  return `${left} character${left === 1 ? '' : 's'} left...`;
+}
+function wireCounter(ta, out) {
+  const upd = () => { out.textContent = counterHtml(ta.value.length); out.classList.toggle('low', MAXLEN - ta.value.length <= 15); };
+  ta.addEventListener('input', upd); upd();
+}
+
+function resultsListHtml(res) {
+  if (!res.results || !res.results.length)
+    return `<div class="card empty">No statements reached consensus in this poll.</div>`;
+  return res.results.map(r => `
+    <div class="result">
+      <div class="txt">${esc(r.body)}</div>
+      <span class="pill ${r.side === 'Agree' ? 'agree' : 'disagree'}">${r.pct}% ${esc(r.side)}</span>
+    </div>`).join('');
+}
+
+/* =====================================================================
+   LANDING PAGE
+   ===================================================================== */
+function renderLanding() {
+  const hosted = (store('cp_hosted') || []).slice().reverse();
+  $app.innerHTML = `
+  <div class="wrap">
+    <h1>Consensus Poll</h1>
+    <p class="sub">Find out what a room actually agrees on.</p>
+
+    <div class="card">
+      <h2 style="margin-top:0">Join a poll</h2>
+      <input type="text" id="joinCode" placeholder="Poll code, e.g. K7QPM" maxlength="5" autocapitalize="characters" autocomplete="off">
+      <button class="btn primary" id="joinBtn">Join</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Host a new poll</h2>
+      <input type="text" id="pollTitle" placeholder="Poll name, e.g. 2026 Workshop" maxlength="100">
+      <button class="btn" id="createBtn">Create poll</button>
+    </div>
+
+    ${hosted.length ? `
+    <div class="card">
+      <h2 style="margin-top:0">Polls you host on this device</h2>
+      ${hosted.map(h => `<a class="btn small" href="?host=${esc(h.code)}&key=${esc(h.key)}">${esc(h.title)} <span class="codechip">${esc(h.code)}</span></a>`).join('')}
+    </div>` : ''}
+  </div>`;
+
+  const go = () => {
+    const c = document.getElementById('joinCode').value.trim().toUpperCase();
+    if (c.length < 5) return toast('Enter the 5-character code.', true);
+    location.href = `?p=${encodeURIComponent(c)}`;
+  };
+  document.getElementById('joinBtn').onclick = go;
+  document.getElementById('joinCode').onkeydown = e => { if (e.key === 'Enter') go(); };
+
+  document.getElementById('createBtn').onclick = async e => {
+    const title = document.getElementById('pollTitle').value.trim();
+    if (!title) return toast('Give the poll a name first.', true);
+    e.target.disabled = true;
+    try {
+      const r = await rpc('create_poll', { p_title: title });
+      const list = store('cp_hosted') || [];
+      list.push({ code: r.code, key: r.host_key, title, created: Date.now() });
+      store('cp_hosted', list);
+      location.href = `?host=${r.code}&key=${r.host_key}`;
+    } catch (err) { toast(err.message, true); e.target.disabled = false; }
+  };
+}
+
+/* =====================================================================
+   PARTICIPANT
+   ===================================================================== */
+const P = { code: (params.get('p') || '').toUpperCase(), state: null, screen: null, current: null, pick: {} };
+
+async function startParticipant() {
+  try { P.state = await rpc('join_poll', { p_code: P.code, p_pid: PID }); }
+  catch (e) {
+    $app.innerHTML = `<div class="wrap"><div class="card center"><p>${esc(e.message)}</p>
+      <a class="btn" href="${esc(baseUrl())}">Back</a></div></div>`;
+    return;
+  }
+  routeByStatus(true);
+  // keep an eye on the poll's status (start / end) and submission count
+  every(6000, async () => {
+    const before = P.state.status;
+    P.state = await rpc('poll_state', { p_code: P.code, p_pid: PID });
+    if (P.state.status !== before) routeByStatus(true);
+    else if (P.screen === 'menu') renderMenu();
+  });
+}
+
+function routeByStatus(force) {
+  const s = P.state.status;
+  if (s === 'setup') renderWaiting();
+  else if (s === 'ended') renderParticipantResults();
+  else if (force || !P.screen || P.screen === 'waiting') renderMenu();
+}
+
+function header() {
+  return `<p class="sub center" style="margin-bottom:4px"><strong>${esc(P.state.title)}</strong> · <span class="codechip">${esc(P.state.code)}</span></p>`;
+}
+
+function renderWaiting() {
+  P.screen = 'waiting';
+  $app.innerHTML = `<div class="wrap">${header()}
+    <div class="card center">
+      <div class="spinner"></div>
+      <h2 style="margin-top:0">You're in!</h2>
+      <p class="muted">Waiting for the host to start the poll. This screen will update by itself.</p>
+    </div></div>`;
+}
+
+function renderMenu() {
+  P.screen = 'menu';
+  const used = P.state.submitted, max = P.state.max_submissions;
+  $app.innerHTML = `<div class="wrap">${header()}
+    <div style="padding-top:8vh">
+      <button class="btn big" id="ansBtn">Answer Questions</button>
+      <button class="btn big" id="subBtn" ${used >= max ? 'disabled' : ''}>Submit Questions</button>
+      <p class="hint">${used >= max ? `You've submitted all ${max} of your questions.` : `You can submit ${max - used} more question${max - used === 1 ? '' : 's'}.`}</p>
+    </div></div>`;
+  document.getElementById('ansBtn').onclick = () => loadNext();
+  document.getElementById('subBtn').onclick = renderSubmit;
+}
+
+function renderSubmit() {
+  P.screen = 'submit';
+  $app.innerHTML = `<div class="wrap">${header()}
+    <div class="title-box">Submit Question</div>
+    <textarea id="qText" maxlength="${MAXLEN}" placeholder="Write a statement people can agree or disagree with."></textarea>
+    <div class="counter" id="qCount"></div>
+    <button class="btn primary" id="sendBtn">Submit</button>
+    <button class="btn" id="backBtn">Back</button>
+  </div>`;
+  const ta = document.getElementById('qText');
+  wireCounter(ta, document.getElementById('qCount'));
+  ta.focus();
+  document.getElementById('backBtn').onclick = renderMenu;
+  document.getElementById('sendBtn').onclick = async e => {
+    const text = ta.value.trim();
+    if (!text) return toast('Type your statement first.', true);
+    e.target.disabled = true;
+    try {
+      P.state = await rpc('submit_question', { p_code: P.code, p_pid: PID, p_text: text });
+      renderMenu();
+      toast('Question submitted!');
+    } catch (err) { toast(err.message, true); e.target.disabled = false; }
+  };
+}
+
+async function loadNext(data) {
+  P.screen = 'answer';
+  if (!data) {
+    $app.innerHTML = `<div class="wrap">${header()}<div class="spinner"></div></div>`;
+    try { data = await rpc('next_question', { p_code: P.code, p_pid: PID }); }
+    catch (e) { toast(e.message, true); return renderMenu(); }
+  }
+  if (data.status && data.status !== 'live') { P.state.status = data.status; return routeByStatus(true); }
+  P.current = data.question;
+  P.pick = {};
+  if (!P.current) return renderCaughtUp(data);
+  renderAnswer(data);
+}
+
+function renderAnswer(data) {
+  const q = P.current;
+  $app.innerHTML = `<div class="wrap">${header()}
+    <div class="title-box">Answer Question</div>
+    <div class="statement">${q.mine ? '<span class="badge">Your question</span>' : ''}<div>${esc(q.body)}</div></div>
+    <div class="row" style="margin-top:14px">
+      <button class="choice g" data-k="agree" data-v="1">Agree</button>
+      <button class="choice r" data-k="agree" data-v="0">Disagree</button>
+    </div>
+    <div class="q-label">Is this question important?</div>
+    <div class="row">
+      <button class="choice g" data-k="important" data-v="1" aria-label="Important">${thumb(false)}</button>
+      <button class="choice r" data-k="important" data-v="0" aria-label="Not important">${thumb(true)}</button>
+    </div>
+    <button class="btn primary" id="nextBtn" disabled>Next</button>
+    <button class="btn" id="backBtn">Back</button>
+    <p class="hint">${data.answered} answered · ${data.remaining} waiting for you</p>
+  </div>`;
+  document.querySelectorAll('.choice').forEach(b => b.onclick = () => {
+    const k = b.dataset.k;
+    P.pick[k] = b.dataset.v === '1';
+    document.querySelectorAll(`.choice[data-k="${k}"]`).forEach(x => x.classList.toggle('on', x === b));
+    document.getElementById('nextBtn').disabled = !('agree' in P.pick && 'important' in P.pick);
+  });
+  document.getElementById('backBtn').onclick = renderMenu;
+  document.getElementById('nextBtn').onclick = async e => {
+    e.target.disabled = true;
+    try {
+      const next = await rpc('submit_answer', {
+        p_code: P.code, p_pid: PID, p_question_id: q.id, p_agree: P.pick.agree, p_important: P.pick.important });
+      loadNext(next);
+    } catch (err) { toast(err.message, true); e.target.disabled = false; }
+  };
+}
+
+function renderCaughtUp(data) {
+  $app.innerHTML = `<div class="wrap">${header()}
+    <div class="card center">
+      <h2 style="margin-top:0">You're all caught up</h2>
+      <p class="muted">You've answered ${data.answered} question${data.answered === 1 ? '' : 's'}. New ones may be added as people submit them.</p>
+      <button class="btn primary" id="again">Check for new questions</button>
+      <button class="btn" id="backBtn">Back</button>
+    </div></div>`;
+  document.getElementById('again').onclick = () => loadNext();
+  document.getElementById('backBtn').onclick = renderMenu;
+}
+
+async function renderParticipantResults() {
+  P.screen = 'results';
+  stopTimer();
+  $app.innerHTML = `<div class="wrap"><div class="spinner"></div></div>`;
+  try {
+    const res = await rpc('poll_results', { p_code: P.code });
+    $app.innerHTML = `<div class="wrap">
+      <h1 class="center">Results</h1>
+      <p class="sub center">${esc(res.title)} · ${res.participants} participant${res.participants === 1 ? '' : 's'}</p>
+      <p class="hint">Statements where over half of everyone answered, and over 70% landed on the same side.</p>
+      ${resultsListHtml(res)}
+    </div>`;
+  } catch (e) { $app.innerHTML = `<div class="wrap"><div class="card center">${esc(e.message)}</div></div>`; }
+}
+
+/* =====================================================================
+   HOST
+   ===================================================================== */
+const H = { code: (params.get('host') || '').toUpperCase(), key: params.get('key') || '', dash: null, qrDone: false };
+
+async function startHost() {
+  try { H.dash = await rpc('host_dashboard', { p_code: H.code, p_key: H.key }); }
+  catch (e) {
+    $app.innerHTML = `<div class="wrap"><div class="card center"><p>${esc(e.message)}</p>
+      <a class="btn" href="${esc(baseUrl())}">Back</a></div></div>`;
+    return;
+  }
+  // remember this poll on this device
+  const list = store('cp_hosted') || [];
+  if (!list.some(h => h.code === H.code)) { list.push({ code: H.code, key: H.key, title: H.dash.title, created: Date.now() }); store('cp_hosted', list); }
+  renderHost();
+  every(3000, async () => {
+    if (H.dash.status === 'ended') return;
+    H.dash = await rpc('host_dashboard', { p_code: H.code, p_key: H.key });
+    renderHostLive();
+  });
+}
+
+function renderHost() {
+  const d = H.dash;
+  const joinUrl = `${baseUrl()}?p=${d.code}`;
+  const hostUrl = `${baseUrl()}?host=${d.code}&key=${H.key}`;
+  H.qrDone = false;
+  $app.innerHTML = `<div class="wrap wide">
+    <p class="sub" style="margin:0"><a href="${esc(baseUrl())}" style="color:inherit">Consensus Poll</a> · Host</p>
+    <h1>${esc(d.title)} <span class="status ${d.status}" id="statusBadge">${d.status === 'setup' ? 'Not started' : d.status}</span></h1>
+    <div class="grid">
+      <div>
+        <div class="card center">
+          <div class="muted">Join at this link or code</div>
+          <div style="font-size:2rem;margin:6px 0"><span class="codechip">${esc(d.code)}</span></div>
+          <div id="qr"></div>
+          <div class="linkbox">${esc(joinUrl)}</div>
+          <button class="btn small" id="copyJoin">Copy join link</button>
+          <a class="btn small" href="?p=${esc(d.code)}" target="_blank" rel="noopener">Participate yourself ↗</a>
+        </div>
+        <div class="warn"><strong>Bookmark this page.</strong> This host link is the only way back to your controls.
+          <button class="btn small" id="copyHost">Copy host link</button></div>
+      </div>
+      <div id="hostMain"></div>
+    </div>
+  </div>`;
+  document.getElementById('copyJoin').onclick = () => copy(joinUrl, 'Join link copied');
+  document.getElementById('copyHost').onclick = () => copy(hostUrl, 'Host link copied — keep it private');
+  if (window.QRCode) { new QRCode(document.getElementById('qr'), { text: joinUrl, width: 200, height: 200 }); }
+  renderHostLive(true);
+}
+
+function copy(text, msg) {
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+    .then(() => toast(msg)).catch(() => prompt('Copy this:', text));
+}
+
+function renderHostLive(first) {
+  const d = H.dash, main = document.getElementById('hostMain');
+  if (!main) return;
+  const badge = document.getElementById('statusBadge');
+  badge.className = `status ${d.status}`; badge.textContent = d.status === 'setup' ? 'Not started' : d.status;
+
+  if (d.status === 'ended') return renderHostResults();
+
+  // don't wipe a half-typed seed question during refresh
+  const ta = document.getElementById('seedText');
+  const draft = ta ? ta.value : '';
+  const hadFocus = ta && document.activeElement === ta;
+  const openRemoved = document.getElementById('removedBox')?.open;
+
+  const pct = q => q.seen ? Math.round(100 * q.important / q.seen) : 0;
+  const activeHtml = d.active.length ? d.active.map((q, i) => `
+    <div class="qrow">
+      <div class="rank">${i + 1}</div>
+      <div class="body">${esc(q.body)}
+        ${q.consensus ? ' <span class="pill agree" style="font-size:.72rem" title="Would reach consensus if the poll ended now. Recalculated as people join; final only when you press END.">on track for consensus</span>' : ''}
+        ${q.is_seed ? ' <span class="badge" style="margin:0">starter</span>' : ''}
+        <div class="meta">${q.seen
+          ? `${q.seen} answered · ${pct(q)}% say important · ${q.agree} agree / ${q.disagree} disagree`
+          : 'Not answered yet'}</div>
+        ${q.seen ? `<div class="bar"><span style="width:${pct(q)}%"></span></div>` : ''}
+      </div>
+      <button class="xbtn" data-del="${q.id}">Delete</button>
+    </div>`).join('') : `<div class="empty">No questions yet.</div>`;
+
+  const removedHtml = d.removed.length ? d.removed.map(q => `
+    <div class="qrow"><div class="body">${esc(q.body)}
+      <div class="meta">${q.status === 'deleted' ? 'Deleted by host' : `Voted unimportant (${q.unimportant} of ${q.seen} said not important)`}</div>
+    </div></div>`).join('') : `<div class="empty">Nothing removed yet.</div>`;
+
+  main.innerHTML = `
+    <div class="card">
+      <div class="stats">
+        <div><div class="stat">${d.participants}</div><div class="muted">participants</div></div>
+        <div><div class="stat">${d.active.length}</div><div class="muted">questions in play</div></div>
+        <div><div class="stat">${d.answers}</div><div class="muted">answers</div></div>
+      </div>
+      ${d.status === 'setup'
+        ? `<button class="btn primary" id="startBtn">Start poll</button>
+           <p class="hint">People can join now and will wait until you start.</p>`
+        : `<button class="btn danger" id="endBtn">END</button>`}
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">${d.status === 'setup' ? 'Add starting questions' : 'Add a question'}</h2>
+      <textarea id="seedText" maxlength="${MAXLEN}" style="min-height:90px;border-radius:14px;font-size:1.05rem"
+        placeholder="A statement people can agree or disagree with."></textarea>
+      <div class="counter" id="seedCount"></div>
+      <button class="btn" id="addBtn">Add question</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Live ranking</h2>
+      <p class="hint" style="text-align:left;margin-top:-4px">Ordered by how many people called each one important. Updates every few seconds. "On track for consensus" is provisional: it's rechecked against the current headcount as people join, and only becomes final when you press END.</p>
+      ${activeHtml}
+    </div>
+
+    <div class="card">
+      <details id="removedBox" ${openRemoved ? 'open' : ''}>
+        <summary>Removed questions (${d.removed.length})</summary>
+        ${removedHtml}
+      </details>
+    </div>`;
+
+  const nta = document.getElementById('seedText');
+  nta.value = draft;
+  wireCounter(nta, document.getElementById('seedCount'));
+  if (hadFocus) { nta.focus(); nta.setSelectionRange(draft.length, draft.length); }
+
+  document.getElementById('addBtn').onclick = async e => {
+    const text = nta.value.trim();
+    if (!text) return toast('Type a statement first.', true);
+    e.target.disabled = true;
+    try {
+      await rpc('host_add_question', { p_code: H.code, p_key: H.key, p_text: text });
+      nta.value = '';
+      H.dash = await rpc('host_dashboard', { p_code: H.code, p_key: H.key });
+      renderHostLive();
+      toast('Question added');
+    } catch (err) { toast(err.message, true); e.target.disabled = false; }
+  };
+
+  main.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this question from the poll?')) return;
+    try {
+      await rpc('host_delete_question', { p_code: H.code, p_key: H.key, p_question_id: Number(b.dataset.del) });
+      H.dash = await rpc('host_dashboard', { p_code: H.code, p_key: H.key });
+      renderHostLive();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  const sBtn = document.getElementById('startBtn');
+  if (sBtn) sBtn.onclick = async () => {
+    try {
+      await rpc('host_start', { p_code: H.code, p_key: H.key });
+      H.dash = await rpc('host_dashboard', { p_code: H.code, p_key: H.key });
+      renderHostLive();
+      toast('Poll started!');
+    } catch (err) { toast(err.message, true); }
+  };
+  const eBtn = document.getElementById('endBtn');
+  if (eBtn) eBtn.onclick = async () => {
+    if (!confirm('End the poll for everyone and show the results? This cannot be undone.')) return;
+    try {
+      await rpc('host_end', { p_code: H.code, p_key: H.key });
+      H.dash.status = 'ended';
+      renderHostLive();
+    } catch (err) { toast(err.message, true); }
+  };
+}
+
+async function renderHostResults() {
+  stopTimer();
+  const main = document.getElementById('hostMain');
+  main.innerHTML = `<div class="spinner"></div>`;
+  let res;
+  try { res = await rpc('poll_results', { p_code: H.code }); }
+  catch (e) { main.innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
+  const ended = res.ended_at ? new Date(res.ended_at) : new Date();
+  main.innerHTML = `
+    <div class="card">
+      <h2 style="margin-top:0">Save results</h2>
+      <input type="text" id="saveName" value="${esc(store('cp_name_' + H.code) || res.title)}" maxlength="100">
+      <div class="row">
+        <button class="btn primary" id="csvBtn">Download spreadsheet (.csv)</button>
+        <button class="btn" id="pdfBtn">Print / Save as PDF</button>
+      </div>
+    </div>
+    <h2>Results</h2>
+    <p class="sub">${res.participants} participant${res.participants === 1 ? '' : 's'} · ended ${ended.toLocaleString()} ·
+      ${res.results.length} statement${res.results.length === 1 ? '' : 's'} reached consensus</p>
+    ${resultsListHtml(res)}`;
+
+  const nameEl = document.getElementById('saveName');
+  const name = () => nameEl.value.trim() || res.title;
+  nameEl.oninput = () => store('cp_name_' + H.code, nameEl.value);
+
+  document.getElementById('csvBtn').onclick = () => {
+    const q = s => `"${String(s).replace(/"/g, '""')}"`;
+    const lines = [
+      ['Poll', name()], ['Ended', ended.toLocaleString()], ['Participants', res.participants], [],
+      ['Statement', 'Consensus', 'Percent', 'Number answered'],
+      ...res.results.map(r => [r.body, r.side, r.pct + '%', r.seen])
+    ].map(row => row.map(q).join(','));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (name().replace(/[\\/:*?"<>|]+/g, '').trim() || 'results') + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
+  document.getElementById('pdfBtn').onclick = () => {
+    document.getElementById('print-area').innerHTML = `
+      <h1>${esc(name())}</h1>
+      <div class="meta">${res.participants} participants · ${esc(ended.toLocaleString())} · statements that reached consensus</div>
+      ${res.results.length ? res.results.map(r => `<div class="pr"><div class="t">${esc(r.body)}</div><div class="p">${r.pct}% ${esc(r.side)}</div></div>`).join('')
+        : '<p>No statements reached consensus.</p>'}`;
+    const old = document.title;
+    document.title = name();
+    window.print();
+    document.title = old;
+  };
+}
+
+/* =====================================================================
+   START
+   ===================================================================== */
+if (!configured) {
+  $app.innerHTML = `<div class="wrap"><div class="card"><h2 style="margin-top:0">Almost there</h2>
+    <p>This app isn't connected to its database yet. Open <code>index.html</code> and paste your Supabase
+    Project URL and key near the top (see the setup guide).</p></div></div>`;
+} else if (!sb) {
+  $app.innerHTML = `<div class="wrap"><div class="card center">Could not load. Check your internet connection and refresh.</div></div>`;
+} else if (H.code && H.key) startHost();
+else if (P.code) startParticipant();
+else renderLanding();
+
+})();
+</script>
+</body>
+</html>
