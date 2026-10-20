@@ -202,6 +202,12 @@ h1,h2{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:.02
 .waitline{font-size:13.5px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .waitline .chip{background:var(--panel-2);padding:3px 8px;border-radius:3px;color:var(--ink)}
 .step:disabled{opacity:.6;cursor:default}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--panel);border-radius:8px;padding:4px}
+.seg button{border:0;background:transparent;border-radius:5px;padding:10px 4px;font-weight:600;color:var(--muted)}
+.seg button[aria-checked="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg.ro button{cursor:default}
+.seg.ro button[aria-checked="false"]{opacity:.5}
+.sndbtn[aria-pressed="false"]{color:var(--muted)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom, 0px));z-index:40;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:6px;font-size:14px;font-weight:500;max-width:min(420px, calc(100% - 32px));text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.4)}
 
 </style>
@@ -262,6 +268,12 @@ h1,h2{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:.02
       </div>
       <div class="plist" id="lb-list"></div>
     </div>
+    <div class="field">
+      <div class="rowline"><span class="eyebrow">Turn timer</span><span class="note" id="lb-timer-note"></span></div>
+      <div class="seg" id="lb-timer" role="radiogroup" aria-label="Turn timer">
+        <button role="radio" data-t="30">30s</button><button role="radio" data-t="45">45s</button><button role="radio" data-t="60">60s</button><button role="radio" data-t="0">No timer</button>
+      </div>
+    </div>
     <div class="field" id="lb-namebox">
       <label class="eyebrow" for="lb-name">Your name</label>
       <div class="joinrow">
@@ -273,7 +285,10 @@ h1,h2{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:.02
     <button class="btn primary" id="lb-start" hidden disabled>Start game</button>
     <p class="note" id="lb-hint" style="margin:0;text-align:center"></p>
     <p class="err" id="lb-err" hidden></p>
-    <button class="btn ghosty" id="lb-leave">Leave room</button>
+    <div class="rowline">
+      <button class="btn ghosty" id="lb-leave">Leave room</button>
+      <button class="btn ghosty sndbtn" id="lb-sound" aria-pressed="true">Sound on</button>
+    </div>
   </div>
 </section>
 
@@ -346,7 +361,10 @@ h1,h2{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:.02
     <header class="pad"><h2 style="font-size:20px">Your report</h2><button class="btn" id="dr-close" style="padding:8px 14px">Close</button></header>
     <div class="body pad" id="dr-body"></div>
     <div class="pad" style="padding-block:12px calc(12px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--border)">
-      <button class="btn ghosty" id="dr-leave" style="width:100%">Leave this game</button>
+      <div class="rowline">
+        <button class="btn ghosty sndbtn" id="dr-sound" aria-pressed="true">Sound on</button>
+        <button class="btn ghosty" id="dr-leave" style="flex:1">Leave this game</button>
+      </div>
     </div>
   </div>
 </div>
@@ -784,10 +802,10 @@ function subscribe(code){
   try {
     rt = rt || window.supabase.createClient(CFG.url, CFG.key, { auth:{ persistSession:false } });
     if (chan) rt.removeChannel(chan);
-    chan = rt.channel('sig-' + code)
-      .on('postgres_changes', { event:'*', schema:'public', table:'game_signals', filter:'code=eq.' + code }, p => {
-        if (!S.view || !p.new || p.new.version > S.view.version) refresh();
-      })
+    const ping = p => { const ver = p && (p.version ?? (p.new && p.new.version)); if (!S.view || ver == null || ver > S.view.version) refresh(); };
+    chan = rt.channel('room-' + code)
+      .on('broadcast', { event:'update' }, m => ping(m.payload))
+      .on('postgres_changes', { event:'*', schema:'public', table:'game_signals', filter:'code=eq.' + code }, ping)
       .subscribe(st => { S.live = st === 'SUBSCRIBED'; const l = $('#lb-live'); if (l) l.hidden = !S.live; });
   } catch { S.live = false; }
 }
@@ -796,8 +814,8 @@ function unsubscribe(){ try { if (chan && rt) rt.removeChannel(chan); } catch {}
 // fallback polling (slower when realtime is connected)
 setInterval(() => {
   if (!S.code || document.hidden) return;
-  const every = S.live ? 8000 : 2000;
-  const expired = S.view && S.view.status === 'playing' && Date.now() > S.deadline + 1500;
+  const every = S.live ? 5000 : 2000;
+  const expired = S.view && S.view.status === 'playing' && isFinite(S.deadline) && Date.now() > S.deadline + 1500;
   if (Date.now() - S.lastFetch > (expired ? 1500 : every)) refresh();
 }, 500);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
@@ -812,16 +830,19 @@ function apply(v){
     if (v.turn !== S.lastTurn){
       S.lastTurn = v.turn;
       S.cur = { place:null, move:null, mode: meP.alive ? 'place' : 'move', editing:false };
-      S.deadline = Date.now() + (v.msLeft ?? 30000);
+      S.deadline = v.msLeft == null ? Infinity : Date.now() + v.msLeft;
       S.autoSent = false;
       S.fitNext = true;
-    } else if (v.msLeft != null){
+    } else if (v.msLeft == null){
+      S.deadline = Infinity;
+    } else {
       const d = Date.now() + v.msLeft;
       if (Math.abs(d - S.deadline) > 1500) S.deadline = d;
     }
     show('turn');
     renderTurn();
-    announceNew(v);
+    const died = announceNew(v);
+    spotSound(v, died);
     return;
   }
   if (v.status === 'over'){
@@ -836,7 +857,8 @@ function announceNew(v){
   const fresh = log.slice(S.seen);
   S.seen = log.length; saveSession();
   const deaths = fresh.filter(e => e.kind === 'kill' || e.kind === 'trapped');
-  if (deaths.length) announce(deaths);
+  if (deaths.length){ announce(deaths); Sound.gong(); }
+  return deaths.length > 0;
 }
 
 function announce(deaths){
@@ -859,6 +881,68 @@ function announce(deaths){
   $('#ko-ok').focus();
 }
 $('#ko-ok').onclick = () => { $('#killov').hidden = true; };
+
+/* ---------- sound effects (synthesized, no files) ---------- */
+const Sound = (() => {
+  let ctx = null, on = store.get('sound') !== false;
+  const unlock = () => {
+    try {
+      if (!ctx){ const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ctx = new AC(); }
+      if (ctx.state === 'suspended') ctx.resume();
+      // iOS only allows audio after a sound starts inside a tap
+      const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0);
+    } catch {}
+  };
+  ['pointerdown', 'touchend', 'keydown'].forEach(ev => addEventListener(ev, unlock, { passive:true }));
+  const played = { gong:0, sonar:0 };
+  const ready = () => on && ctx && ctx.state === 'running';
+  function gong(){
+    if (!ready()) return;
+    played.gong++;
+    const t = ctx.currentTime, out = ctx.createGain();
+    out.gain.value = .55; out.connect(ctx.destination);
+    // inharmonic partials of a struck metal disc: [ratio, level, decay seconds]
+    [[1, 1, 4.5], [2.01, .5, 3.4], [2.76, .38, 2.6], [3.95, .22, 1.9], [5.4, .14, 1.3], [8.9, .06, .8]].forEach(([r, a, d]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(98 * r * 1.012, t); o.frequency.exponentialRampToValueAtTime(98 * r, t + .4);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + .012); g.gain.exponentialRampToValueAtTime(.0008, t + d);
+      o.connect(g).connect(out); o.start(t); o.stop(t + d + .05);
+    });
+    // mallet strike
+    const n = ctx.createBufferSource(), buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * .08), ctx.sampleRate), ch = buf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / ch.length);
+    const f = ctx.createBiquadFilter(), ng = ctx.createGain(); f.type = 'lowpass'; f.frequency.value = 900; ng.gain.value = .35;
+    n.buffer = buf; n.connect(f).connect(ng).connect(out); n.start(t);
+  }
+  function sonar(){
+    if (!ready()) return;
+    played.sonar++;
+    const t = ctx.currentTime;
+    const ping = (at, vol) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+      o.type = 'sine'; o.frequency.setValueAtTime(1480, at); o.frequency.exponentialRampToValueAtTime(1380, at + 1.4);
+      f.type = 'bandpass'; f.frequency.value = 1450; f.Q.value = 6;
+      g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(vol, at + .006); g.gain.exponentialRampToValueAtTime(.0006, at + 1.5);
+      o.connect(f).connect(g).connect(ctx.destination); o.start(at); o.stop(at + 1.6);
+    };
+    ping(t, .5); ping(t + .55, .14); ping(t + 1.05, .05);   // ping, then fading echoes
+  }
+  function label(){ document.querySelectorAll('.sndbtn').forEach(b => { b.textContent = on ? 'Sound on' : 'Sound off'; b.setAttribute('aria-pressed', String(on)); }); }
+  function set(v){ on = v; store.set('sound', v); label(); if (v){ unlock(); setTimeout(sonar, 60); } }
+  label();
+  return { gong, sonar, set, played, get on(){ return on; }, get state(){ return ctx ? ctx.state : 'none'; } };
+})();
+document.querySelectorAll('.sndbtn').forEach(b => b.onclick = () => Sound.set(!Sound.on));
+
+// sonar once per turn when you spotted someone or were spotted
+const SPOT_KINDS = new Set(['beacon', 'sighting', 'ghost', 'spotted']);
+function spotSound(v, afterGong){
+  if (S.spotTurn === v.turn) return;
+  S.spotTurn = v.turn;
+  if (S.spotSkip){ S.spotSkip = false; return; }   // don't replay on a page reload
+  const hit = (v.report || []).some(r => r.turn === v.turn - 1 && SPOT_KINDS.has(r.kind));
+  if (hit) setTimeout(() => Sound.sonar(), afterGong ? 1700 : 0);
+}
 
 /* ---------- home ---------- */
 function goHome(err){
@@ -912,6 +996,9 @@ function renderLobby(){
   const rb = $('#lb-ready');
   rb.textContent = mine.ready ? 'Not ready yet' : "I'm ready";
   rb.classList.toggle('primary', !mine.ready);
+  const seg = $('#lb-timer'); seg.classList.toggle('ro', !isHost);
+  seg.querySelectorAll('button').forEach(b => { b.setAttribute('aria-checked', String(+b.dataset.t === v.timer)); b.disabled = !isHost; });
+  $('#lb-timer-note').textContent = isHost ? 'You choose' : 'Set by the host';
   const st = $('#lb-start'); st.hidden = !isHost;
   const notReady = L.filter(p => !p.ready);
   st.disabled = !(L.length >= 2 && !notReady.length);
@@ -930,6 +1017,7 @@ async function lobbyAct(action, extra){
 $('#lb-name').oninput = () => { const v = S.view; const mine = v && v.lobby.find(p => p.id === v.me); $('#lb-name-save').disabled = !mine || $('#lb-name').value.trim() === mine.name || !$('#lb-name').value.trim(); };
 $('#lb-name-save').onclick = async () => { const n = $('#lb-name').value.trim(); const r = await lobbyAct('name', { name:n }); if (r.ok){ store.set('name', n); $('#lb-name').blur(); } };
 $('#lb-name').onkeydown = e => { if (e.key === 'Enter') $('#lb-name-save').click(); };
+$('#lb-timer').onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled || +b.dataset.t === S.view.timer) return; lobbyAct('timer', { timer:+b.dataset.t }); };
 $('#lb-ready').onclick = () => { const v = S.view, mine = v.lobby.find(p => p.id === v.me); lobbyAct('ready', { ready:!mine.ready }); };
 $('#lb-start').onclick = async () => { const b = $('#lb-start'); b.disabled = true; b.textContent = 'Starting…'; await lobbyAct('start'); b.textContent = 'Start game'; };
 $('#lb-leave').onclick = async () => { await api('leave', { code:S.code, token:S.token }); clearSession(); goHome(); };
@@ -1055,8 +1143,10 @@ $('#t-done').onclick = () => {
 setInterval(() => {
   const v = S.view;
   if (!v || v.status !== 'playing') return;
+  const el = $('#t-timer');
+  if (!isFinite(S.deadline)){ el.textContent = '—'; el.classList.remove('low'); el.title = 'No turn timer'; return; }
   const left = Math.max(0, Math.ceil((S.deadline - Date.now()) / 1000));
-  const el = $('#t-timer'); el.textContent = left; el.classList.toggle('low', left <= 5);
+  el.textContent = left; el.classList.toggle('low', left <= 5);
   // at zero, send whatever the player picked but didn't confirm
   if (left <= 0 && !S.autoSent){
     S.autoSent = true;
@@ -1135,7 +1225,7 @@ renderPreview();
 (function boot(){
   const sess = store.get('session');
   if (sess && sess.code && sess.token){
-    S.code = sess.code; S.token = sess.token; S.seen = sess.seen || 0;
+    S.code = sess.code; S.token = sess.token; S.seen = sess.seen || 0; S.spotSkip = true;
     $('#ld-msg').textContent = `Rejoining room ${sess.code}…`;
     show('loading');
     subscribe(S.code);
@@ -1144,7 +1234,7 @@ renderPreview();
   }
   goHome();
 })();
-window.__ds = { get S(){ return S; }, tap: s => onTap(s) };
+window.__ds = { get S(){ return S; }, tap: s => onTap(s), Sound };
 
 })();
 </script>
