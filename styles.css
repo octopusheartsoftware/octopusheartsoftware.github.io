@@ -36,6 +36,17 @@ html { scroll-behavior: smooth; }
 @media (min-width: 640px) { .tentacle { width: 240px; } }
 @media (max-width: 639px) { .hero { padding-bottom: 150px; } }
 
+/* 404 page: the hero fills the screen, so its tentacle leaves through the bottom of the window. */
+.fill-page { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.fill-page main { flex: 1; }
+
+/* Home page: the arch rises out of the right edge of the screen and dips back into it, so it never meets the section below. */
+.tentacle-side { bottom: auto; top: 50%; transform: translateY(-50%); width: 150px; }
+@media (max-width: 639px) {
+  .hero:has(.tentacle-side) { padding-bottom: 200px; }
+  .tentacle-side { top: auto; bottom: var(--space-6); transform: none; width: 96px; }
+}
+
 /* Sections */
 main section { padding: var(--space-12) 0; }
 @media (min-width: 640px) { main section { padding: var(--space-16) 0; } }
