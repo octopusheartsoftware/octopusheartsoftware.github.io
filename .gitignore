@@ -1,0 +1,17 @@
+# Secrets: never commit these
+.env
+.env.*
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+secrets.*
+
+# Editor and OS clutter
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log

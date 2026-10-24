@@ -1,9 +1,0 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "com.octopusheartsoftware.flashcards",
-        "sha256_cert_fingerprints": ["20:4F:3C:C1:A7:5F:EF:8B:07:18:EC:10:7E:3C:5E:E3:1E:73:6A:8D:30:5C:80:84:3C:55:51:FC:0B:57:DF:25"]
-      }
-    }]
-

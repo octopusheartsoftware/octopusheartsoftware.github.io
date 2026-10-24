@@ -1,0 +1,80 @@
+/* Site layout. Colors, fonts and spacing all come from brand.css; no new colors here. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 var(--space-4); }
+@media (min-width: 640px) { .wrap { padding: 0 var(--space-8); } }
+
+.skip-link { position: absolute; left: -9999px; }
+.skip-link:focus { left: var(--space-4); top: var(--space-4); z-index: 10; background: var(--surface-raised); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); }
+
+/* Header */
+.site-header { background: var(--sky); }
+.site-header .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-6); padding-top: var(--space-4); padding-bottom: var(--space-4); }
+.wordmark { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 24px; color: var(--ink); text-decoration: none; }
+.site-nav ul { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); list-style: none; margin: 0; padding: 0; }
+.site-nav a { color: var(--ink); text-decoration: none; font-weight: 600; padding: var(--space-1) 0; }
+.site-nav a:hover { color: var(--ocean); }
+.site-nav a[aria-current="page"] { color: var(--ocean); }
+
+/* Hero */
+.hero { position: relative; overflow: hidden; padding: var(--space-12) 0 var(--space-16); }
+@media (min-width: 640px) { .hero { padding: var(--space-16) 0 calc(var(--space-16) * 2); } }
+.hero .wrap { position: relative; z-index: 1; }
+.hero h1 { margin: 0 0 var(--space-4); max-width: 14ch; }
+.hero p { margin: 0; max-width: 34em; color: var(--ink-muted); }
+.hero .label { color: var(--ocean); margin: 0 0 var(--space-3); }
+@media (max-width: 639px) { .hero h1 { font-size: 36px; line-height: 42px; } }
+
+/* The signature tentacle, cropped by the hero's bottom-right corner. */
+.tentacle { position: absolute; right: 0; bottom: 0; width: 160px; height: auto; color: var(--ocean); pointer-events: none; }
+.tentacle path { fill: currentColor; stroke: currentColor; }
+@media (min-width: 640px) { .tentacle { width: 240px; } }
+@media (max-width: 639px) { .hero { padding-bottom: 150px; } }
+
+/* Sections */
+main section { padding: var(--space-12) 0; }
+@media (min-width: 640px) { main section { padding: var(--space-16) 0; } }
+.section-title { margin: 0 0 var(--space-2); }
+.section-intro { margin: 0 0 var(--space-8); color: var(--ink-muted); max-width: 36em; }
+
+.values { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); list-style: none; margin: 0; padding: 0; }
+.values li { background: var(--surface-raised); border-radius: var(--radius-md); padding: var(--space-6); }
+.values h3 { margin: 0 0 var(--space-2); }
+.values p { margin: 0; color: var(--ink-muted); }
+
+/* App cards */
+.apps-section { background: var(--sky); }
+.app-grid { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.app-card { background: var(--surface-raised); border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: var(--space-3); }
+.app-card h3 { margin: 0; }
+.app-card p { margin: 0; color: var(--ink-muted); }
+.app-card .facts { margin: 0; padding: 0; list-style: none; color: var(--ink-muted); }
+.app-card .facts li::before { content: "·"; margin-right: var(--space-2); color: var(--ocean); font-weight: 600; }
+.pill { align-self: flex-start; background: var(--blush); color: var(--on-accent); border-radius: var(--radius-full); padding: var(--space-1) var(--space-3); }
+
+/* Contact */
+.contact-box { background: var(--surface-raised); border-radius: var(--radius-lg); padding: var(--space-8) var(--space-6); max-width: 36em; }
+.contact-box p { margin: 0 0 var(--space-4); }
+.contact-box p:last-child { margin-bottom: 0; color: var(--ink-muted); }
+.email-link { display: inline-block; font-family: var(--font-display); font-weight: 500; font-size: 20px; line-height: 28px; overflow-wrap: anywhere; }
+.button { display: inline-block; background: var(--ocean); color: var(--on-ocean); text-decoration: none; font-weight: 600; border-radius: var(--radius-md); padding: var(--space-3) var(--space-6); transition: opacity 200ms ease-out; }
+.button:hover { opacity: .9; }
+
+/* Long-form pages (privacy) */
+.page { padding: var(--space-12) 0 var(--space-16); }
+.prose { max-width: 40em; }
+.prose h1 { margin: 0 0 var(--space-2); }
+.prose h2 { margin: var(--space-12) 0 var(--space-3); }
+.prose p, .prose li { color: var(--ink); }
+.prose ul { padding-left: var(--space-6); }
+.prose li + li { margin-top: var(--space-2); }
+.updated { color: var(--ink-muted); margin: 0 0 var(--space-8); }
+
+/* Footer */
+.site-footer { border-top: 1px solid var(--line); padding: var(--space-8) 0; color: var(--ink-muted); }
+.site-footer .wrap { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); justify-content: space-between; }
+.site-footer p { margin: 0; }
+.site-footer a { color: var(--ink-muted); }
