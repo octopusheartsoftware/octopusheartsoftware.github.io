@@ -9,6 +9,7 @@ The Octopus Heart Software website, at https://octopusheartsoftware.com (hosted 
 | `404.html` | Friendly "page not found" page. |
 | `styles.css` | Page layout. Uses only `brand.css` variables. |
 | `brand.css` | A copy of `shared/brand/brand.css`. If the brand kit changes, copy it here again. |
+| `octopus-mark.svg`, `favicon.svg` | Copies of the logo mark from `shared/brand/logo/`: beside the name in the header, and in the browser tab. |
 | `CNAME` | Tells GitHub Pages to serve the site at octopusheartsoftware.com. |
 | `sw.js` | Clears the old Flashcards site's offline cache from returning visitors' browsers. Safe to delete after a few months. |
 | `.nojekyll` | Tells GitHub Pages to publish the files as they are. |
