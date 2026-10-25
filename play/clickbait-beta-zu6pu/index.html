@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" data-app-name="Clickbait Campus">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clickbait Campus</title>
+<meta name="description" content="A browser game about surviving a semester: grades, allowance, stress, phishing, sponsored content and the news.">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="viewport">
+  <div id="stage">
+    <div class="wall"></div>
+    <div class="desk"></div>
+
+    <header id="hud">
+      <div class="hud-title">Clickbait Campus</div>
+      <div id="hud-clock"></div>
+      <div id="hud-money"><span id="money-num"></span><span id="money-pop" class="pop"></span></div>
+      <div id="hud-stress"><span>Stress</span><div class="meter"><div id="stress-fill"></div></div><b id="stress-num"></b><span id="stress-pop" class="pop"></span></div>
+      <button class="snd-btn hud-snd" data-act="sound" data-arg="music" title="Music on or off"></button>
+      <button class="snd-btn hud-snd" data-act="sound" data-arg="sfx" title="Sound effects on or off"></button>
+      <button id="speed-btn" data-act="speed" title="Slow the clock down when things get hectic">🐢 Slow time</button>
+      <button id="feedback-btn" data-act="feedback" title="Send feedback">💬 Feedback</button>
+      <button id="pause-btn" data-act="pause">Pause</button>
+    </header>
+
+    <section id="laptop" aria-label="Laptop">
+      <div class="lap-screen">
+        <nav id="lap-tabs"><span id="tab-btns"></span><span class="tab-clock" id="tab-clock"></span></nav>
+        <main id="lap-view"></main>
+        <div id="lap-status"></div>
+        <div id="lap-toast"></div>
+      </div>
+      <div class="lap-deck"><div class="keys"></div><div class="trackpad"></div></div>
+    </section>
+
+    <section id="tv" aria-label="TV news" aria-live="polite">
+      <div class="tv-screen">
+        <div id="tv-label">GBF NEWS 7</div>
+        <div id="tv-icon"></div>
+        <div id="tv-headline"></div>
+      </div>
+      <div class="tv-stand"></div>
+    </section>
+
+    <section id="phone" aria-label="Phone">
+      <div class="phone-screen">
+        <div id="phone-status"></div>
+        <div id="phone-toast"></div>
+        <main id="phone-view"></main>
+        <nav id="phone-nav"></nav>
+      </div>
+    </section>
+
+    <div id="tut"><div id="tut-spot"></div><div id="tut-card" role="dialog" aria-live="polite"></div></div>
+    <div id="overlay"></div>
+  </div>
+</div>
+<script src="content/classes.js"></script>
+<script src="content/stories.js"></script>
+<script src="content/messages.js"></script>
+<script src="content/semester.js"></script>
+<script src="audio.js"></script>
+<script src="arcade.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
