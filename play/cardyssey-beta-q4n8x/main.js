@@ -553,17 +553,19 @@ function setBtnShape(k) {
 function buttonLabel(b) {
   const need = itemById(adv, b.needs);
   const parts = [buttonName(adv, b), need ? `needs ${need.name}` : '', b.changes.length ? `${b.changes.length} ${b.changes.length === 1 ? 'change' : 'changes'}` : '', b.startsOff ? 'off at start' : ''].filter(Boolean);
-  const s = parts.join(' · ');
-  return s.length > 38 ? s.slice(0, 37) + '…' : s;
+  return parts.join(' · ');
 }
 
+// Labels sit in each button's top-left corner, cut to the button's width, so buttons stacked
+// on top of each other (a lock, and the doorway it reveals) show their labels one under the other.
 function renderButtons() {
   const c = current();
   if (!c || !onCard()) { $('btnLayer').innerHTML = ''; return; }
   $('btnLayer').innerHTML = c.buttons.map((b) => {
-    const box = bounds(b);
+    const box = bounds(b), full = buttonLabel(b), fits = Math.max(4, Math.floor((box.w - 12) / 9));
+    const label = full.length > fits ? full.slice(0, fits - 1) + '…' : full;
     const cls = `btn-shape${b.id === selBtn ? ' selected' : ''}${buttonDoesSomething(adv, b) ? '' : ' unlinked'}${b.startsOff ? ' off' : ''}`;
-    return `<g class="${cls}" data-btn="${b.id}">${shapeSvg(b)}<text x="${box.x + box.w / 2}" y="${box.y + box.h / 2}">${esc(buttonLabel(b))}</text></g>`;
+    return `<g class="${cls}" data-btn="${b.id}">${shapeSvg(b)}<title>${esc(full)}</title><text x="${box.x + 8}" y="${box.y + 16}">${esc(label)}</text></g>`;
   }).join('');
 }
 
