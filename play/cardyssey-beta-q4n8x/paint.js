@@ -34,8 +34,13 @@ export class Painter {
     for (const c of [this.paper, this.wet]) { c.width = w; c.height = h; }
   }
 
-  // Show a picture (or blank paper) and start a fresh undo history.
-  async load(src) {
+  // Show a picture (or blank paper) and start a fresh undo history. `ready` resolves once it's showing.
+  load(src) {
+    this.ready = this.loadNow(src);
+    return this.ready;
+  }
+
+  async loadNow(src) {
     const token = ++this.loading;
     this.cancelText();
     this.drag = null;

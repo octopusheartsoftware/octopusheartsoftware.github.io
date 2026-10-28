@@ -29,6 +29,7 @@
         <a href="#" data-view="play" class="tab">Play</a>
       </nav>
       <span id="saveState" class="save-state small" aria-live="polite"></span>
+      <button id="tourBtn" class="btn quiet" title="A guided tour that builds a tiny adventure with you"></button>
       <button id="toFile" class="btn quiet" title="Download this adventure as a file, as a backup or to move it to another computer"></button>
     </div>
   </header>
@@ -45,7 +46,7 @@
             <button id="openFile" class="btn big"></button>
             <input id="fileInput" type="file" accept=".cardyssey,.json,application/json" hidden>
           </p>
-          <p class="small">New here? <button id="openDemo" class="linkbtn">Look at some example adventures</button> to see what you can make.</p>
+          <p class="hero-new">New here? <button id="startTour" class="btn quiet"></button> <span class="small muted">or</span> <button id="openDemo" class="linkbtn small">look at some example adventures</button></p>
         </div>
         <div class="tentacle" aria-hidden="true"></div>
       </div>

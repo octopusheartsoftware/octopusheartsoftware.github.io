@@ -13,9 +13,10 @@ import { SOUNDS, playSound } from './sounds.js';
 import { STAMPS, stampSvg } from './stamps.js';
 import { buildDemo } from './demo.js';
 import { buildKitten, buildPizza, buildAlien } from './examples.js';
+import { createTour } from './tour.js';
 import { icon } from './icons.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const FEEDBACK_EMAIL = 'support@octopusheartsoftware.com';
 const FEEDBACK_URL = 'https://feedback.octopusheartsoftware.com/';
 const $ = (id) => document.getElementById(id);
@@ -863,7 +864,7 @@ placedLayer.addEventListener('pointercancel', endPlacedDrag);
 // ---------- Keyboard shortcuts in Make ----------
 
 document.addEventListener('keydown', (e) => {
-  if (view !== 'make' || e.target.closest('input, select, textarea') || $('dlg').open) return;
+  if (view !== 'make' || tour.active || e.target.closest('input, select, textarea') || $('dlg').open) return;
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? painter.redo() : painter.undo(); }
   else if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); painter.redo(); }
@@ -914,6 +915,64 @@ player.setSound(soundOn);
 $('soundOn').onchange = (e) => {
   player.setSound(e.target.checked);
   try { localStorage.setItem('cardyssey-sound', e.target.checked ? 'on' : 'off'); } catch { /* fine */ }
+};
+
+// ---------- The guided tour ----------
+
+const waitFor = async (test) => { for (let i = 0; i < 200 && !test(); i++) await new Promise((r) => setTimeout(r, 25)); };
+const tour = createTour({
+  painter, $,
+  adv: () => adv,
+  current,
+  changed,
+  flushImage,
+  renderEditor,
+  renderButtons,
+  openCard, openItem, openProp, setMode, setTool, setColor, setSize, setStamp,
+  addCard: (name, after) => addCard(name, after),
+  place(kind, id, x, y, size) {
+    const p = { id: uid(), [kind === 'item' ? 'itemId' : 'propId']: id, x, y, size };
+    placedList(kind).push(p);
+    selPlaced = `${kind}:${p.id}`;
+    changed();
+    renderPlaced();
+    renderPlaceTools();
+  },
+  selectButton(id) { selBtn = id; draft = { what: '', to: '' }; renderButtons(); renderBtnInfo(); },
+  async show(v) { go(v); await waitFor(() => view === v); await new Promise((r) => setTimeout(r, 150)); },
+  // Start the tour's adventure over from a blank first card (used when going Back).
+  async reset() {
+    if (view !== 'make') { go('make'); await waitFor(() => view === 'make'); }
+    const first = newCard('Start');
+    Object.assign(adv, { title: 'My first adventure', startId: first.id, cards: [first], items: [], props: [] });
+    $('advTitle').value = adv.title;
+    imageDirty = false; paintedKey = null; selBtn = null; selPlaced = null;
+    openCard(first.id);
+    setMode('paint');
+    changed();
+    await painter.ready;
+  },
+  ended(how) {
+    if (how === 'finished') toast(`“${adv.title}” is saved in your adventures. Change anything you like, or make your own!`);
+    else toast('Tour closed. Your tour adventure is saved, and you can take the tour again any time.');
+  },
+});
+
+async function startTour() {
+  await flushSave();
+  const a = newAdventure('My first adventure');
+  await saveAdventure(a);
+  location.hash = `#/make/${a.id}`;
+  await waitFor(() => adv && adv.id === a.id && view === 'make');
+  await painter.ready;
+  setMode('paint');
+  tour.start();
+}
+$('startTour').innerHTML = withIcon('play', 'Take the tour');
+$('startTour').onclick = startTour;
+$('tourBtn').innerHTML = withIcon('help', 'Tour');
+$('tourBtn').onclick = async () => {
+  if (await ask('Take the tour?', 'The tour starts a new practice adventure and builds it with you, step by step. This adventure stays saved just as it is.', 'Start the tour')) startTour();
 };
 
 // ---------- Dialogs, messages, feedback, privacy ----------
