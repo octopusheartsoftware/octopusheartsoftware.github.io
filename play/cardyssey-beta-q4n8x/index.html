@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b67ad">
+  <title>Cardyssey</title>
+  <meta name="description" content="Draw your own adventure, one card at a time. A free creativity tool from Octopus Heart Software.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="brand.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/" title="My adventures">
+      <span class="logo-card" aria-hidden="true"><span class="mark"></span></span>
+      <span class="wordmark">Cardyssey<svg class="bow" viewBox="0 0 120 14" preserveAspectRatio="none" aria-hidden="true">
+        <path class="bow-string" d="M5 3H115"/>
+        <path class="bow-limb" d="M2 1.5Q4 3 5 3Q60 16 115 3Q116 3 118 1.5"/>
+      </svg></span>
+    </a>
+    <div class="adv-bar">
+      <input id="advTitle" class="title-input" maxlength="80" aria-label="Adventure name">
+      <nav class="tabs" aria-label="Adventure">
+        <a href="#" data-view="make" class="tab">Make</a>
+        <a href="#" data-view="map" class="tab">Map</a>
+        <a href="#" data-view="play" class="tab">Play</a>
+      </nav>
+      <span id="saveState" class="save-state small" aria-live="polite"></span>
+      <button id="toFile" class="btn quiet" title="Download this adventure as a file, as a backup or to move it to another computer"></button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Home: the adventures saved in this browser -->
+    <section id="view-home" class="view" hidden>
+      <div class="hero sky-wash">
+        <div class="hero-text">
+          <h1 class="display-l">Draw your own adventure, one card at a time.</h1>
+          <p class="body-l">Paint a picture, hide buttons on it, and link it to the next card. Keep going, and you've made a story people can explore.</p>
+          <p class="hero-actions">
+            <button id="newAdv" class="btn primary big"></button>
+            <button id="openFile" class="btn big"></button>
+            <input id="fileInput" type="file" accept=".cardyssey,.json,application/json" hidden>
+          </p>
+          <p class="small">New here? <button id="openDemo" class="linkbtn">Look at some example adventures</button> to see what you can make.</p>
+        </div>
+        <div class="tentacle" aria-hidden="true"></div>
+      </div>
+      <div class="home-list">
+        <h2 class="heading-2">Your adventures</h2>
+        <p class="small muted">Saved in this browser, on this device only. Clearing your browsing data or using a private window erases them, so use <b>Save to file</b> to keep a backup.</p>
+        <ul id="advList" class="adv-list"></ul>
+      </div>
+      <footer class="footer small">
+        Cardyssey is a free creativity tool from Octopus Heart Software · Test version
+        · <button class="linkbtn" data-act="feedback">Send feedback</button>
+        · <button class="linkbtn" data-act="privacy">Privacy</button>
+      </footer>
+    </section>
+
+    <!-- Make: cards on the left, the card in the middle, tools on the right -->
+    <section id="view-make" class="view" hidden>
+      <aside class="cards-panel">
+        <h2 class="label">Cards</h2>
+        <ol id="cardList" class="card-list"></ol>
+        <button id="addCard" class="btn"></button>
+        <h2 class="label section-heading">Items</h2>
+        <p id="itemsHelp" class="small muted">Things players pick up and carry, like a key.</p>
+        <ol id="itemList" class="card-list thing-list"></ol>
+        <button id="addItem" class="btn"></button>
+        <h2 class="label section-heading">Props</h2>
+        <p id="propsHelp" class="small muted">Things on a card that can change, like a door that opens.</p>
+        <ol id="propList" class="card-list thing-list"></ol>
+        <button id="addProp" class="btn"></button>
+      </aside>
+
+      <div class="work">
+        <div id="thingBar" class="thing-bar">
+          <div class="card-bar">
+            <span id="thingKind" class="tag"></span>
+            <input id="thingName" class="card-name" maxlength="40" aria-label="Name">
+            <span class="spacer"></span>
+            <button id="delThing" class="btn quiet small-btn danger-text"></button>
+          </div>
+          <div id="looksBar" class="looks-bar"></div>
+          <p id="thingHelp" class="small muted"></p>
+          <label class="check small"><input type="checkbox" id="thingHidden"> Hidden at the start (a button can make it appear)</label>
+        </div>
+        <div id="cardBar" class="card-bar">
+          <input id="cardName" class="card-name" maxlength="60" aria-label="Card name">
+          <span id="startTag" class="tag start"></span>
+          <button id="makeStart" class="btn quiet small-btn">Make this the start card</button>
+          <label class="check"><input type="checkbox" id="cardEnding"> This card is an ending</label>
+          <label class="check"><input type="checkbox" id="cardBack"> Show a Back button</label>
+          <span class="spacer"></span>
+          <button id="playHere" class="btn quiet small-btn"></button>
+          <button id="dupCard" class="btn quiet small-btn"></button>
+          <button id="delCard" class="btn quiet small-btn danger-text"></button>
+        </div>
+        <div class="mode-switch" role="tablist" aria-label="What to do on this card">
+          <button data-mode="paint" role="tab">Paint</button>
+          <button data-mode="buttons" role="tab">Buttons</button>
+          <button data-mode="place" role="tab">Place</button>
+        </div>
+        <div id="stage" class="stage">
+          <canvas id="paper" class="paper"></canvas>
+          <canvas id="wet" class="wet"></canvas>
+          <svg id="stickerLayer" class="sticker-layer" viewBox="0 0 960 600"></svg>
+          <svg id="btnLayer" class="btn-layer" viewBox="0 0 960 600"></svg>
+        </div>
+      </div>
+
+      <aside class="tools-panel">
+        <div id="paintTools">
+          <div id="toolGrid" class="tool-grid"></div>
+          <div id="stampPicker" hidden>
+            <h3 class="label">Pick a stamp</h3>
+            <div id="stampGrid" class="stamp-grid"></div>
+            <p class="small muted">Click the picture to stamp it. Size changes how big it is.</p>
+          </div>
+          <h3 class="label">Size</h3>
+          <div id="sizes" class="sizes"></div>
+          <h3 class="label">Color</h3>
+          <div id="palette" class="palette"></div>
+          <div class="undo-row">
+            <button id="undo" class="btn"></button>
+            <button id="redo" class="btn"></button>
+          </div>
+          <details class="more">
+            <summary>More tools</summary>
+            <label class="slider">Exact size <input id="sizeSlider" type="range" min="1" max="80"> <output id="sizeOut"></output></label>
+            <label class="slider">See-through <input id="opacitySlider" type="range" min="10" max="100" step="5"> <output id="opacityOut"></output></label>
+            <label class="check"><input type="checkbox" id="filled"> Filled boxes and ovals</label>
+            <label class="check">Any color <input type="color" id="anyColor"></label>
+            <button id="pickerTool" class="btn quiet" data-tool="picker"></button>
+            <button id="flipCard" class="btn quiet"></button>
+            <button id="clearCard" class="btn quiet danger-text"></button>
+            <p class="small muted">Tip: hold Shift to draw straight lines, perfect squares and circles.</p>
+          </details>
+        </div>
+
+        <div id="buttonTools" hidden>
+          <h3 class="label">Draw a button</h3>
+          <div id="btnShapes" class="tool-grid"></div>
+          <p class="small muted">Drag on the card to make a button. Players won't see it, but clicking there does what you choose.</p>
+          <div id="btnInfo"></div>
+        </div>
+
+        <div id="placeTools" hidden>
+          <div id="placePicker"></div>
+          <div id="placedInfo"></div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- Map: every card and how they connect -->
+    <section id="view-map" class="view" hidden>
+      <aside class="map-side">
+        <h2 class="heading-3">Map</h2>
+        <p id="mapCount" class="small muted"></p>
+        <h3 class="label">Things to check</h3>
+        <ul id="problems" class="problems"></ul>
+        <p class="small muted">Click any card to work on it.</p>
+        <h3 class="label">Adventure settings</h3>
+        <label class="check"><input type="checkbox" id="allowHints"> Let players show where the buttons are</label>
+        <p class="small muted">Turn this off if finding the hidden buttons is part of the puzzle.</p>
+      </aside>
+      <div class="map-scroll"><div id="mapCanvas" class="map-canvas"></div></div>
+    </section>
+
+    <!-- Play -->
+    <section id="view-play" class="view" hidden>
+      <div class="play-bar">
+        <label class="check" id="showBtnsLabel"><input type="checkbox" id="showBtns"> Show where the buttons are</label>
+        <span id="hintsOff" class="small muted">Button hints are off for this adventure. You can change that on the Map.</span>
+        <label class="check"><input type="checkbox" id="soundOn" checked> Sounds</label>
+        <button id="restart" class="btn quiet small-btn"></button>
+      </div>
+      <div id="player" class="player"></div>
+    </section>
+  </main>
+
+  <dialog id="dlg" class="dlg"></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
