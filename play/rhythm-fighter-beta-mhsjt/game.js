@@ -380,20 +380,21 @@ function gainRhythm(n) {
 const flowAt = nb => !!game.flow && nb >= game.flow.first && nb < game.flow.end;
 const nextArrow = (pat, from) => { for (let i = from; i < pat.length; i++) if (pat[i] !== '.') return i; return -1; };
 const slotTime = (c, i) => timeAt(c.start + i * 0.5);
-// Flow starts on the next beat: three beats of lead-in, then 3 combos 6 beats apart
-// (2 beats to read the arrows, 4 beats of punching on the half-beats).
+// Flow starts on the next beat. Each combo is two bars: a bar to read the arrows (with a
+// "3, 2, 1" count-in on its last three beats), then a bar of punching on the half-beats.
+const FLOW_LEN = 25; // beats: 4 + 3 combos × 8, plus a little room after the last one
 function startFlow(nb) {
   if (game.flow) return;
   const first = Math.ceil(nb) + 1, picks = [...COMBOS].sort(() => Math.random() - 0.5).slice(0, 3);
   game.flow = {
-    first, end: first + 19,
-    combos: picks.map(([name, pattern], i) => ({ name, pattern: pattern.split(''), start: first + 3 + i * 6, hits: [], next: nextArrow(pattern.split(''), 0), state: 'ready' })),
+    first, end: first + FLOW_LEN,
+    combos: picks.map(([name, pattern], i) => ({ name, pattern: pattern.split(''), start: first + 4 + i * 8, hits: [], next: nextArrow(pattern.split(''), 0), state: 'ready' })),
   };
   game.rhythm = 0; game.chain = 0; game.chainBeat = -9; game.stats.flows++;
-  openUntil(nb, first + 19, 2);
+  openUntil(nb, first + FLOW_LEN, 2);
   sfx.flowIn(clock());
   say('FLOW!', { where: 'big', color: RED, size: 64, life: 1 });
-  teach('flow', 'FLOW: punch the arrows as the red line hits them.\n← Block zone    → Attack zone    ↓ Dodge strip');
+  teach('flow', 'FLOW! After 3, 2, 1, punch each arrow\nas the red ring lands on it.\n← Block zone    → Attack zone    ↓ Dodge strip');
 }
 function flowInput(action, real, t) {
   const nb = beatAt(t), c = game.flow.combos.find(c => nb >= c.start - 1 && nb < c.start + 4.5);
@@ -450,6 +451,7 @@ function update() {
       sfx.kick(t); sfx.hat(t + game.spb / 2);
       if (b >= 4) sfx.bass(t, BASSLINE[b % 8], game.spb * 0.5);
       if (flowAt(b)) { sfx.hat(t + game.spb / 4); sfx.hat(t + game.spb * 3 / 4); sfx.kick(t + game.spb / 2); } // double time in Flow
+      if (game.flow) for (const c of game.flow.combos) if (b >= c.start - 3 && b < c.start) sfx.click(t, b === c.start - 1); // "3, 2, 1" ticks
     }
     game.musicBeat++;
   }
@@ -835,16 +837,33 @@ function drawFlowPanel(now) {
   g.textAlign = 'right'; g.fillStyle = WASH; g.font = `12px ${FONT}`;
   g.fillText(`combo ${f.combos.indexOf(c) + 1} of 3`, 366, top + 104);
   g.textAlign = 'center'; g.font = '900 34px system-ui, sans-serif';
+  const live = c.state !== 'dropped' && c.state !== 'done';
   c.pattern.forEach((k, i) => {
     const x = x0 + i * sp, y = top + 78;
     if (k === '.') { g.fillStyle = 'rgba(21,18,15,0.3)'; g.beginPath(); g.arc(x, y - 10, 3, 0, Math.PI * 2); g.fill(); return; }
     g.fillStyle = c.hits.includes(i) ? RED : c.state === 'dropped' ? 'rgba(21,18,15,0.22)' : INK;
     g.fillText({ L: '←', R: '→', D: '↓' }[k], x, y);
+    if (i === c.next && live) { // approach ring: closes in on the next arrow and lands on it when it's time to hit
+      const prev = c.hits.length ? c.start + c.hits[c.hits.length - 1] * 0.5 : c.start - 3, due = c.start + i * 0.5;
+      const u = clamp((due - nb) / (due - prev), 0, 1);
+      g.strokeStyle = RED; g.lineWidth = 3; g.globalAlpha = 0.35 + 0.65 * (1 - u);
+      g.beginPath(); g.arc(x, y - 11, 19 + 50 * u, 0, Math.PI * 2); g.stroke();
+      g.globalAlpha = 1;
+    }
   });
   const ph = x0 + (nb - c.start) / 0.5 * sp;
-  if (ph > 30 && ph < 370 && c.state !== 'dropped' && c.state !== 'done') {
+  if (ph > 30 && ph < 370 && live) {
     g.strokeStyle = RED; g.lineWidth = 3;
     g.beginPath(); g.moveTo(ph, top + 46); g.lineTo(ph, top + 92); g.stroke();
+  }
+  if (nb >= c.start - 3 && nb < c.start && live) { // big "3, 2, 1" in time with the ticks
+    const left = Math.ceil(c.start - nb), age = nb - (c.start - left);
+    g.font = `${Math.round(90 * (1 + Math.max(0, 0.3 - age) ))}px ${FONT}`;
+    g.globalAlpha = 1 - age * 0.6;
+    g.lineWidth = 8; g.strokeStyle = PAPER; g.lineJoin = 'round';
+    g.strokeText(String(left), 200, view.H * 0.47);
+    g.fillStyle = left === 1 ? RED : INK; g.fillText(String(left), 200, view.H * 0.47);
+    g.globalAlpha = 1;
   }
 }
 
@@ -863,7 +882,7 @@ function drawHud() {
   bar(W - 164, 150, game.foe / FOE_HP, RED, 'THE METRONOME', true, seed + 9);
   // Rhythm bar (drains while Flow lasts)
   const ready = game.rhythm >= 100 && !game.flow;
-  const fr = game.flow ? clamp((game.flow.end - beatAt(clock())) / 19, 0, 1) : game.rhythm / 100;
+  const fr = game.flow ? clamp((game.flow.end - beatAt(clock())) / FLOW_LEN, 0, 1) : game.rhythm / 100;
   g.fillStyle = 'rgba(21,18,15,0.12)'; g.fillRect(14, 55, W - 28, 9);
   g.fillStyle = game.flow || ready ? RED : INK; g.fillRect(14, 55, (W - 28) * fr, 9);
   g.fillStyle = ready ? RED : INK; g.font = `12px ${FONT}`; g.textAlign = 'center';
