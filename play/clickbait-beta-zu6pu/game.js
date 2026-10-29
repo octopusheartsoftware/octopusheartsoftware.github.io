@@ -966,7 +966,7 @@
     Sound.music('title');
     const code = CODE ? `<p class="code-chip">Class code <b>${CODE}</b>: everyone using this code gets the same semester. Sound starts off.
       <button class="linkbtn light" data-act="leave-code">Play a random semester instead</button></p>` : '';
-    showOverlay(`<div class="ov title" style="padding-top:24px"><img class="title-logo" src="logo.svg" alt="The Octopus Heart octopus in a graduation cap"><h1 class="wave" aria-label="Clickbait Campus">${waveTitle('Clickbait Campus')}</h1>
+    showOverlay(`<div class="ov title" style="padding-top:50px"><h1 class="wave" aria-label="Clickbait Campus">${waveTitle('Clickbait Campus')}</h1>
       <p><span class="beta-badge">Beta</span> One semester. Three screens. Way too many emails.</p>${code}
       <p><button class="btn primary" data-act="tutorial">Start (with a quick tour)</button>
       <button class="btn" data-act="start">Skip the tour</button></p>
