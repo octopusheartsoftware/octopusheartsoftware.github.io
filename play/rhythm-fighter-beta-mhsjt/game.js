@@ -1,6 +1,8 @@
 'use strict';
 // Rhythm Fighter, playable test: one opponent, three tap zones, attacks that land on the beat.
 // Everything is timed from the audio clock so sound, pictures and judging agree.
+// Look: pen and ink on paper. Solid ink shapes with hand-drawn edges that gently "boil",
+// dry-brush smears behind fast movement, and ink splatters on hits. Red ink only means danger or impact.
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), canvas = $('#game'), g = canvas.getContext('2d');
@@ -14,9 +16,12 @@ const settings = { bpm: store.get('bpm', 100), offset: store.get('offset', 0), z
 
 // ---------- Tuning ----------
 const PERFECT = 0.07, OK = 0.16;          // seconds either side of the moment a punch lands
-const ZONE_SPLIT = 0.655;                  // Dodge strip starts this far down the screen
-const DMG = { jab: 7, heavy: 20, guardBreak: 10, punch: 3, beatPunch: 6 };
-const FOE_HP = 150;
+const ON_BEAT = 0.09;                      // a punch this close to a beat counts as on the beat
+const ZONE_SPLIT = 0.76;                   // Dodge strip starts this far down the screen
+// Punching in an opening: off-beat punches do a little; on-beat punches build a chain (1, 2, 3)
+// that keeps him open, and the 4th beat in a row is a FULL MEASURE finisher.
+const DMG = { jab: 7, heavy: 20, guardBreak: 10, offBeat: 3, chain: [4, 5, 6], measure: 12 };
+const FOE_HP = 180;
 const TELL = { jab: 1, heavy: 2 };         // beats of warning before each attack lands
 const RECOVER = { jab: 0.45, heavy: 0.7 }; // beats he needs to get his guard back
 // Fight script: 8 beats per phrase. - rest, J jab, H big swing, O taunt (guard down for 2 beats)
@@ -26,9 +31,12 @@ const PHRASES = [
   ['-J-J--H-', 'J---O---', '--J-J-J-', '---H----'], // 30 to 60
   ['JJ--H---', 'J-J--H--', '-JJJ-O--'],             // below 30
 ];
+const INK = '#15120f', PAPER = '#efe8dc', RED = '#b3262c', WASH = '#5b524b';
+const FONT = "'Permanent Marker', system-ui, sans-serif";
 
 const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const easeOut = t => 1 - (1 - t) * (1 - t), easeIn = t => t * t, easeInOut = t => t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
+const hash = n => { const h = Math.sin(n * 12.9898) * 43758.5453; return (h - Math.floor(h)) * 2 - 1; }; // steady "random" in -1..1
 
 // ---------- Sound (made in code for now; Michael's own sounds replace these later) ----------
 let ctx = null, master, noiseBuf;
@@ -93,7 +101,11 @@ const sfx = {
   dodge: t => noise(t, 0.22, 0.3, 'bandpass', 2500, 400, 2),
   hurt(t) { noise(t, 0.25, 0.6, 'lowpass', 1200, 200); tone(t, 'sawtooth', 160, 50, 0.25, 0.25); },
   punch(t) { noise(t, 0.08, 0.45, 'lowpass', 2500, 500); tone(t, 'sine', 220, 80, 0.1, 0.4); },
-  beatPunch(t) { sfx.punch(t); tone(t, 'triangle', 990, 990, 0.12, 0.2); },
+  beatPunch(t, n) { sfx.punch(t); tone(t, 'triangle', 990 * Math.pow(1.122, n - 1), 990 * Math.pow(1.122, n - 1), 0.14, 0.22); },
+  measure(t) {
+    sfx.punch(t); tone(t, 'sine', 90, 28, 0.7, 0.8); noise(t, 0.9, 0.3, 'highpass', 6000, 2500);
+    for (const [f, d] of [[1250, 0], [1575, 0.04], [1870, 0.08]]) tone(t + d, 'triangle', f, f, 0.35, 0.16);
+  },
   guarded(t) { tone(t, 'square', 300, 200, 0.05, 0.12); noise(t, 0.04, 0.2, 'highpass', 3000); },
   bell(t) { for (const [f, v] of [[880, 0.3], [1320, 0.15], [2200, 0.07]]) tone(t, 'sine', f, f, 1.6, v); },
   thud(t) { tone(t, 'sine', 90, 30, 0.5, 0.6); noise(t, 0.3, 0.3, 'lowpass', 600, 100); },
@@ -116,7 +128,7 @@ const POSE = {
   heavyHit: P({ rot: 0.28, x: 25, hr: 0.12, lx: 90, ly: -10, ls: 3.4, glow: 0.6 }),
   open: P({ y: 16, rot: 0.04, hr: 0.22, hy: 6, lx: -62, ly: 120, ls: 0.9, rx: 64, ry: 125, rs: 0.9 }),
   taunt: P({ y: -4, hr: -0.12, hy: -4, lx: -122, ly: 40, rx: 122, ry: 40 }),
-  hitReact: P({ y: 8, rot: -0.06, hx: 12, hy: -10, hr: 0.35, lx: -70, ly: 100, rx: 72, ry: 95 }),
+  hitReact: P({ y: 8, rot: -0.06, hx: 12, hy: -10, hr: 0.35, lx: -78, ly: 105, rx: 80, ry: 92 }),
   ko: P({ y: 520, rot: 0.5, hr: 0.6, lx: -90, ly: 200, rx: 90, ry: 180 }),
 };
 // Each attack as key poses, measured in beats from the moment it lands.
@@ -148,10 +160,14 @@ function newGame() {
     spb, start: ctx.currentTime + 0.4, moves: [], nextFill: 4, phrase: OPENING.join('').split(''), lastPhrase: '',
     stunUntil: -1, me: 100, foe: FOE_HP, musicBeat: 0, lastCount: -1,
     player: { type: 'idle', t0: -9, side: 1 }, punchSide: 1, busyUntil: 0, punchReady: 0,
+    chain: 0, chainBeat: -9,
+    knock: { x: 0, y: 0, rot: 0, hr: 0, vx: 0, vy: 0, vrot: 0, vhr: 0 }, // springy knockback on top of his pose
+    hitStop: 0, zoom: 0, ink: [], slashes: [],
     hitReact: -9, hitSide: 1, guardTight: -9, shake: 0, hurtAt: -9, flashes: {}, texts: [],
     over: null, overAt: 0, shown: false,
-    stats: { perfect: 0, blocks: 0, dodges: 0, hitsTaken: 0, punches: 0, onBeat: 0 },
+    stats: { perfect: 0, blocks: 0, dodges: 0, hitsTaken: 0, punches: 0, onBeat: 0, measures: 0 },
   };
+  trails.l = []; trails.r = [];
 }
 const beatAt = t => (t - game.start) / game.spb;
 const timeAt = b => game.start + b * game.spb;
@@ -181,13 +197,14 @@ function fillAhead(nb) {
     else if (tok === 'O') game.moves.push({ type: 'taunt', hit: b, end: b + 2, resolved: true, cancelled: false, nodes: [] });
   }
 }
-// He's dazed: clear what he had planned and pick up the script again afterwards.
-function stun(nb, beats) {
-  game.stunUntil = Math.max(game.stunUntil, nb + beats);
-  for (const m of game.moves) if (!m.cancelled && (m.hit > nb || m.type === 'taunt') && !(m.resolved && m.type !== 'taunt')) cancel(m);
-  game.nextFill = Math.ceil(game.stunUntil) + 1;
+// He's dazed until beat `until`: clear what he had planned and pick up the script again afterwards.
+function openUntil(nb, until, rest = 1) {
+  game.stunUntil = until;
+  for (const m of game.moves) if (!m.cancelled && (m.type === 'taunt' || (!m.resolved && m.hit > nb))) cancel(m);
+  game.nextFill = Math.ceil(until) + rest;
   game.phrase = [];
 }
+const stun = (nb, beats) => openUntil(nb, Math.max(game.stunUntil, nb + beats));
 const tauntAt = nb => game.moves.find(m => m.type === 'taunt' && !m.cancelled && nb >= m.hit && nb < m.end);
 const isOpen = nb => nb < game.stunUntil || !!tauntAt(nb);
 const activeMove = nb => game.moves.find(m => m.type !== 'taunt' && !m.cancelled && nb >= m.tellStart && nb <= m.hit + RECOVER[m.type]);
@@ -217,22 +234,25 @@ function act(action) {
   const perfect = best <= PERFECT;
   if (action === 'block' && m.type === 'jab') {
     sfx.block(real); game.stats.blocks++;
-    if (perfect) { sfx.perfect(real); game.stats.perfect++; say('PERFECT BLOCK', { color: '#9fe8ff' }); stun(nb, 1); opening(); }
-    else say('BLOCK', { color: '#cfd8ff' });
+    splat(200, view.H * 0.6, 0, -1, 0.4, 'ink');
+    if (perfect) { sfx.perfect(real); game.stats.perfect++; say('PERFECT BLOCK'); stun(nb, 1); opening(); }
+    else say('BLOCK', { size: 26 });
   } else if (action === 'dodge' && m.type === 'heavy') {
     sfx.dodge(real); game.stats.dodges++;
-    if (perfect) { sfx.perfect(real); game.stats.perfect++; say('PERFECT DODGE', { color: '#9fe8ff' }); stun(nb, 3); }
-    else { say('DODGE!', { color: '#b9f5c4' }); stun(nb, 2); }
+    game.slashes.push({ t0: clock(), dy: 0, seed: Math.random() * 99 });
+    if (perfect) { sfx.perfect(real); game.stats.perfect++; say('PERFECT DODGE'); stun(nb, 3); }
+    else { say('DODGE!'); stun(nb, 2); }
     opening();
   } else if (action === 'block') {
-    hurt(DMG.guardBreak, 'GUARD BROKEN', 'heavyBlock');
+    hurt(DMG.guardBreak, 'GUARD BROKEN', 'heavyBlock', true);
   } else {
-    hurt(DMG.jab, 'TOO SLOW', 'jabDodge');
+    hurt(DMG.jab, 'TOO SLOW', 'jabDodge', false);
   }
 }
 function opening() {
-  say('OPENING!', { color: '#ffd27a' });
-  teach('opening', 'He’s open! Tap Attack now.\nPunches on the beat do double damage.');
+  say('OPENING!', { color: RED });
+  game.chain = 0; game.chainBeat = -9;
+  teach('opening', 'He’s open! Punch ON the beat.\nFour beats in a row = FULL MEASURE.');
 }
 function attack(real, nb) {
   if (real < game.punchReady) return;
@@ -240,21 +260,51 @@ function attack(real, nb) {
   game.punchSide = -game.punchSide;
   game.player = { type: 'punch', t0: real, side: game.punchSide };
   game.stats.punches++;
-  if (isOpen(nb)) {
-    const taunt = tauntAt(nb);
-    if (taunt) { taunt.cancelled = true; game.stunUntil = Math.max(game.stunUntil, taunt.end); }
-    const onBeat = Math.abs(nb - Math.round(nb)) * game.spb <= 0.08;
-    game.foe = Math.max(0, game.foe - (onBeat ? DMG.beatPunch : DMG.punch));
-    game.hitReact = real; game.hitSide = game.punchSide;
-    if (onBeat) { sfx.beatPunch(real); game.stats.onBeat++; say('ON BEAT ×2', { color: '#ffd27a' }); } else sfx.punch(real);
-    if (game.foe <= 0) finish('win');
-  } else {
+  if (!isOpen(nb)) {
     sfx.guarded(real);
     game.guardTight = real;
-    say('GUARDED', { color: '#aab0c8', size: 22 });
+    game.chain = 0; game.chainBeat = -9;
+    say('GUARDED', { color: WASH, size: 22 });
     teach('guarded', 'He’s guarding, and he’ll punish that.\nWait for an opening first.');
-    counter(nb);
+    return counter(nb);
   }
+  const taunt = tauntAt(nb);
+  if (taunt) stun(nb, taunt.end - nb);
+  const beat = Math.round(nb), onBeat = Math.abs(nb - beat) * game.spb <= ON_BEAT;
+  let dmg = DMG.offBeat, power = 0.6;
+  if (onBeat && beat !== game.chainBeat) {
+    game.chain = game.chainBeat === beat - 1 ? game.chain + 1 : 1;
+    game.chainBeat = beat;
+    game.stats.onBeat++;
+    if (game.chain >= 4) { // FULL MEASURE: a huge hit that knocks him out of the opening
+      dmg = DMG.measure; power = 3.2;
+      game.chain = 0; game.chainBeat = -9; game.stats.measures++;
+      openUntil(nb, nb + 0.9, 2);
+      sfx.measure(real);
+      say('FULL MEASURE!', { where: 'big', color: RED, size: 50, life: 1.2 });
+    } else {
+      dmg = DMG.chain[game.chain - 1]; power = 1 + game.chain * 0.45;
+      stun(nb, beat + 1.45 - nb); // staying on the beat keeps him open for the next one
+      sfx.beatPunch(real, game.chain);
+      say(String(game.chain), { where: 'combo', color: game.chain === 3 ? RED : INK, size: 40 + game.chain * 12 });
+    }
+  } else {
+    if (!onBeat) { game.chain = 0; game.chainBeat = -9; }
+    sfx.punch(real);
+  }
+  game.foe = Math.max(0, game.foe - dmg);
+  impact(power);
+  if (game.foe <= 0) finish('win');
+}
+// The feel of a landed punch: a tiny freeze, a camera push, springy knockback and ink.
+function impact(power) {
+  const dir = -game.punchSide, kn = game.knock;
+  kn.vx += dir * 260 * power; kn.vrot += dir * 1.3 * power; kn.vhr += dir * 2.6 * power; kn.vy -= 70 * power;
+  game.hitReact = clock(); game.hitSide = game.punchSide;
+  game.hitStop = performance.now() / 1000 + 0.035 + 0.035 * power;
+  game.zoom = Math.min(0.14, 0.02 + 0.035 * power);
+  game.shake = Math.max(game.shake, 0.2 * power);
+  splat(headPos.x + game.punchSide * 12, headPos.y, dir, -0.35, power, power >= 3 ? 'mix' : 'ink');
 }
 // Punch into his guard and he answers with a jab two beats later (if he isn't busy).
 function counter(nb) {
@@ -263,16 +313,19 @@ function counter(nb) {
   for (const m of game.moves) if (!m.cancelled && m.hit > b && m.hit <= b + 2) cancel(m);
   addMove('jab', b);
 }
-function hurt(dmg, label, lesson) {
+function hurt(dmg, label, lesson, big) {
   const real = ctx.currentTime;
   game.me = Math.max(0, game.me - dmg);
-  game.shake = 1; game.hurtAt = real; game.stats.hitsTaken++;
+  game.shake = big ? 1.2 : 0.8; game.hurtAt = real; game.stats.hitsTaken++;
+  game.chain = 0; game.chainBeat = -9;
   sfx.hurt(real);
-  say(label, { color: '#ff8f8f' });
+  say(label, { color: RED });
+  splat(-10, view.H * 0.2, 1, 0.25, big ? 1.6 : 0.9, 'red');
+  if (big) { splat(410, view.H * 0.2, -1, 0.25, 1.6, 'red'); game.slashes.push({ t0: clock(), dy: view.H * 0.22, seed: Math.random() * 99 }); }
   const lessons = {
-    heavyBlock: 'Big glowing swings break your guard.\nDodge those instead!',
+    heavyBlock: 'Big swings break your guard.\nDodge those instead!',
     jabDodge: 'Quick jabs are too fast to dodge.\nBlock those instead!',
-    heavyHit: 'Orange glow + rising whoosh = big swing.\nTap Dodge as it lands.',
+    heavyHit: 'Red brush circle + rising whoosh = big swing.\nTap Dodge as it lands.',
     jabHit: 'Glint + wooden tock = quick jab.\nTap Block as it lands.',
   };
   if (lesson) teach(lesson, lessons[lesson]);
@@ -282,17 +335,20 @@ function finish(result) {
   const real = ctx.currentTime;
   game.over = result; game.overAt = real;
   for (const m of game.moves) if (!m.resolved || m.type === 'taunt') cancel(m);
-  if (result === 'win') { sfx.bell(real + 0.1); say('K.O.!', { where: 'big', color: '#ffd27a', life: 2 }); }
-  else { sfx.thud(real); say('DOWN!', { where: 'big', color: '#ff8f8f', life: 2 }); }
+  if (result === 'win') {
+    sfx.bell(real + 0.1);
+    splat(headPos.x, headPos.y, -game.punchSide, -0.5, 4, 'mix');
+    say('K.O.!', { where: 'big', color: RED, life: 2 });
+  } else { sfx.thud(real); say('DOWN!', { where: 'big', color: RED, life: 2 }); }
 }
 
 // ---------- Floating words ----------
-function say(text, o = {}) { game.texts.push({ text, t0: clock(), color: o.color || '#fff', size: o.size || 30, where: o.where || 'low', life: o.life || 0.8 }); }
+function say(text, o = {}) { game.texts.push({ text, t0: clock(), color: o.color || INK, size: o.size || 30, where: o.where || 'low', life: o.life || 0.8 }); }
 function teach(key, text) {
   if (taught[key]) return;
   taught[key] = true;
   game.texts = game.texts.filter(x => x.where !== 'teach');
-  say(text, { where: 'teach', size: 17, life: 3.2, color: '#fff6ea' });
+  say(text, { where: 'teach', size: 16, life: 3.4, color: PAPER });
 }
 
 // ---------- Each frame ----------
@@ -309,7 +365,7 @@ function update() {
   }
   if (nb >= 0 && nb < 4 && Math.floor(nb) !== game.lastCount) {
     game.lastCount = Math.floor(nb);
-    say(['3', '2', '1', 'FIGHT!'][game.lastCount], { where: 'big', color: game.lastCount === 3 ? '#ffd27a' : '#fff', life: game.spb * 0.9 });
+    say(['3', '2', '1', 'FIGHT!'][game.lastCount], { where: 'big', color: game.lastCount === 3 ? RED : INK, life: game.spb * 0.9 });
   }
   if (game.over) {
     if (!game.shown && now - game.overAt > 2.2) { game.shown = true; showEnd(); }
@@ -320,7 +376,8 @@ function update() {
   for (const m of game.moves) {
     if (m.resolved || m.type === 'taunt' || now - settings.offset <= m.time + OK) continue;
     m.resolved = true;
-    hurt(DMG[m.type], m.type === 'heavy' ? 'OOF!' : 'OUCH', m.type === 'heavy' ? 'heavyHit' : 'jabHit');
+    const heavy = m.type === 'heavy';
+    hurt(DMG[m.type], heavy ? 'OOF!' : 'OUCH', heavy ? 'heavyHit' : 'jabHit', heavy);
     if (game.over) return;
   }
   game.moves = game.moves.filter(m => (m.end || m.hit) > nb - 4);
@@ -333,7 +390,12 @@ function targetPose(now, nb) {
     const s = game.hitSide;
     return { ...POSE.hitReact, hx: POSE.hitReact.hx * s, hr: POSE.hitReact.hr * s, rot: POSE.hitReact.rot * s };
   }
-  if (nb < game.stunUntil) { const p = { ...POSE.open }; p.x += Math.sin(now * 3) * 8; p.hr += Math.sin(now * 3) * 0.08; return p; }
+  if (nb < game.stunUntil) { // dazed: a loose, staggering sway
+    const p = { ...POSE.open };
+    p.x += Math.sin(now * 3.1) * 16; p.rot += Math.sin(now * 3.1 + 0.6) * 0.07; p.hr += Math.sin(now * 2.3) * 0.16;
+    p.ly += Math.sin(now * 4) * 8; p.ry += Math.sin(now * 4 + 1.5) * 8;
+    return p;
+  }
   const m = activeMove(nb);
   if (m) {
     const p = track(ANIM[m.type], nb - m.hit);
@@ -346,9 +408,103 @@ function targetPose(now, nb) {
 }
 function beatDip(nb) { const d = nb - Math.round(nb); return Math.exp(-d * d * 30); }
 function bobbing(nb) { const b = beatDip(nb); return { ...POSE.guard, y: b * 5, ly: POSE.guard.ly + b * 3, ry: POSE.guard.ry + b * 3 }; }
+function stepKnock(dt) {
+  const kn = game.knock, K = 70, D = 9;
+  for (const [p, v] of [['x', 'vx'], ['y', 'vy'], ['rot', 'vrot'], ['hr', 'vhr']]) { kn[v] += (-K * kn[p] - D * kn[v]) * dt; kn[p] += kn[v] * dt; }
+}
+
+// ---------- Ink: splatters, drips and brush strokes ----------
+function splat(x, y, dx, dy, power, color) {
+  const n = Math.round(8 + 7 * power), a0 = Math.atan2(dy, dx);
+  for (let i = 0; i < n; i++) {
+    const a = a0 + (Math.random() - 0.5) * (1.2 + 0.4 * power), sp = (180 + Math.random() * 520) * (0.7 + power * 0.3);
+    game.ink.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 1.5 + Math.random() * (2.5 + power * 1.5), t: 0,
+      fly: 0.1 + Math.random() * 0.25, stay: 0.8 + Math.random() * 0.8, color: color === 'mix' ? (Math.random() < 0.45 ? 'red' : 'ink') : color });
+  }
+  game.ink.push({ blot: true, x, y, r: 12 + power * 9, t: 0, fly: 0, stay: 0.35 + power * 0.15, color: color === 'red' ? 'red' : 'ink', seed: Math.random() * 99 });
+  if (game.ink.length > 260) game.ink.splice(0, game.ink.length - 260);
+}
+function stepInk(dt) {
+  for (const d of game.ink) {
+    d.t += dt;
+    if (!d.blot && d.t < d.fly) {
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      const f = Math.exp(-dt * 5); d.vx *= f; d.vy = d.vy * f + 420 * dt;
+    }
+  }
+  game.ink = game.ink.filter(d => d.t < d.fly + d.stay);
+}
+function drawInk() {
+  for (const d of game.ink) {
+    g.fillStyle = d.color === 'red' ? RED : INK;
+    if (d.blot) {
+      const grow = clamp(d.t / 0.06, 0.2, 1);
+      g.globalAlpha = 0.9 * (1 - clamp(d.t / d.stay, 0, 1));
+      roughEllPath(g, d.x, d.y, d.r * grow, d.r * grow * 0.85, d.seed, d.seed, d.r * 0.35);
+      g.fill();
+    } else if (d.t < d.fly) { // flying drop, stretched along its path
+      const st = 1 + Math.min(Math.hypot(d.vx, d.vy) / 150, 4);
+      g.globalAlpha = 1;
+      g.beginPath(); g.ellipse(d.x, d.y, d.r * st, d.r / Math.sqrt(st), Math.atan2(d.vy, d.vx), 0, Math.PI * 2); g.fill();
+    } else { // landed drop, fading away
+      g.globalAlpha = 0.85 * (1 - (d.t - d.fly) / d.stay);
+      g.beginPath(); g.arc(d.x, d.y, d.r * 1.15, 0, Math.PI * 2); g.fill();
+    }
+  }
+  g.globalAlpha = 1;
+}
+// Hand-drawn outlines: edges get a small wobble that changes ~11 times a second, like re-inked frames.
+function roughPolyPath(c, pts, seed, amp = 1.6) {
+  c.beginPath();
+  const n = pts.length / 2;
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    const x1 = pts[i * 2], y1 = pts[i * 2 + 1], x2 = pts[((i + 1) % n) * 2], y2 = pts[((i + 1) % n) * 2 + 1];
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1, steps = Math.max(1, Math.round(len / 14)), nx = -(y2 - y1) / len, ny = (x2 - x1) / len;
+    for (let j = 0; j < steps; j++) {
+      const t = j / steps, w = amp * hash(seed * 97 + k++);
+      const x = x1 + (x2 - x1) * t + nx * w, y = y1 + (y2 - y1) * t + ny * w;
+      if (i === 0 && j === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+  }
+  c.closePath();
+}
+function roughEllPath(c, x, y, rx, ry, rot, seed, amp = 1.6) {
+  c.beginPath();
+  const n = 14 + Math.round(Math.max(rx, ry) / 6), cr = Math.cos(rot), sr = Math.sin(rot);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2, j = 1 + amp * hash(seed * 97 + i) / Math.max(rx, ry, 1);
+    const px = Math.cos(a) * rx * j, py = Math.sin(a) * ry * j;
+    const X = x + px * cr - py * sr, Y = y + px * sr + py * cr;
+    if (i) c.lineTo(X, Y); else c.moveTo(X, Y);
+  }
+  c.closePath();
+}
+// A dry-brush stroke: a few bristle lines along a path, some skipped for a scratchy texture.
+// `shape(u)` sets the thickness along the stroke (u goes 0 to 1).
+function dryBrush(c, pts, width, color, alpha, seed = 1, shape = u => u) {
+  if (pts.length < 2) return;
+  const bristles = 7;
+  c.strokeStyle = color; c.lineCap = 'round';
+  for (let b = 0; b < bristles; b++) {
+    if (hash(seed * 13 + b) > 0.75) continue; // a dry gap
+    const off = (b / (bristles - 1) - 0.5) * width * 0.8;
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1], p1 = pts[i], len = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+      const nx = -(p1.y - p0.y) / len, ny = (p1.x - p0.x) / len, f = shape(i / (pts.length - 1));
+      c.globalAlpha = alpha * (0.55 + 0.45 * f);
+      c.lineWidth = Math.max(0.5, width / bristles * 2.6 * f);
+      c.beginPath(); c.moveTo(p0.x + nx * off * f, p0.y + ny * off * f); c.lineTo(p1.x + nx * off * f, p1.y + ny * off * f); c.stroke();
+    }
+  }
+  c.globalAlpha = 1;
+}
 
 // ---------- Drawing ----------
-const COLORS = { body: '#0f1226', glove: '#1d2244', hot: '#3a1f2a', trunks: '#3b1c3c', belt: '#6b3a5a' };
+const COLORS = { body: INK, glove: '#221c18', hot: RED, trunks: WASH, belt: INK };
+const bg = document.createElement('canvas'), BGM = 80; // background drawn once, with a margin for camera moves
+const trails = { l: [], r: [] };
+let headPos = { x: 200, y: 200 }, camInv = new DOMMatrix(), frozenNow = false;
 
 function resize() {
   const r = stage.getBoundingClientRect();
@@ -358,40 +514,61 @@ function resize() {
   view.scale = r.width / view.W;
   view.H = r.height / view.scale;
   view.k = clamp(view.H / 780, 0.8, 1.2);
+  buildBackground();
 }
 
-function drawBackground(ox, oy) {
-  const { W, H } = view, horizon = H * 0.62;
-  const sky = g.createLinearGradient(0, 0, 0, horizon);
-  sky.addColorStop(0, '#141b38'); sky.addColorStop(0.55, '#3b3f74'); sky.addColorStop(1, '#e0876a');
-  g.fillStyle = sky; g.fillRect(-60, -60, W + 120, horizon + 60);
-  const glow = g.createRadialGradient(200 + ox, H * 0.3 + oy, 10, 200 + ox, H * 0.3 + oy, 210);
-  glow.addColorStop(0, 'rgba(255,222,176,0.95)'); glow.addColorStop(0.5, 'rgba(246,190,140,0.45)'); glow.addColorStop(1, 'rgba(246,190,140,0)');
-  g.fillStyle = glow; g.fillRect(-60, -60, W + 120, H + 120);
-  g.fillStyle = '#1a1530'; g.fillRect(-60, horizon + oy, W + 120, H);
-  // ring ropes and posts
-  g.strokeStyle = '#120f22'; g.lineWidth = 5;
-  for (const f of [0.45, 0.51, 0.57]) {
-    const y = H * f + oy;
-    g.beginPath(); g.moveTo(-60, y); g.quadraticCurveTo(200 + ox, y + 14, W + 60, y); g.stroke();
+function buildBackground() {
+  const s = view.dpr * view.scale, W = view.W + BGM * 2, H = view.H + BGM * 2, c = bg.getContext('2d');
+  bg.width = Math.round(W * s); bg.height = Math.round(H * s);
+  c.setTransform(s, 0, 0, s, BGM * s, BGM * s);
+  c.fillStyle = PAPER; c.fillRect(-BGM, -BGM, W, H);
+  for (let i = 0; i < 1800; i++) { // paper grain
+    c.fillStyle = `rgba(70,50,30,${Math.random() * 0.06})`;
+    c.fillRect(-BGM + Math.random() * W, -BGM + Math.random() * H, 1 + Math.random() * 2, 1 + Math.random() * 2);
   }
-  g.fillStyle = '#120f22';
-  g.fillRect(12 + ox * 0.6, H * 0.42 + oy, 12, H * 0.22);
-  g.fillRect(W - 24 + ox * 0.6, H * 0.42 + oy, 12, H * 0.22);
+  const sun = c.createRadialGradient(200, view.H * 0.27, 20, 200, view.H * 0.27, 200); // soft ink wash behind him
+  sun.addColorStop(0, 'rgba(110,95,80,0.3)'); sun.addColorStop(0.7, 'rgba(110,95,80,0.1)'); sun.addColorStop(1, 'rgba(110,95,80,0)');
+  c.fillStyle = sun; c.fillRect(-BGM, -BGM, W, H);
+  const floor = c.createLinearGradient(0, view.H * 0.6, 0, view.H + BGM);
+  floor.addColorStop(0, 'rgba(40,30,25,0)'); floor.addColorStop(1, 'rgba(40,30,25,0.2)');
+  c.fillStyle = floor; c.fillRect(-BGM, view.H * 0.6, W, H);
+  const flat = () => 1;
+  [0.45, 0.51, 0.57].forEach((f, i) => { // ring ropes
+    const pts = [], y = view.H * f;
+    for (let j = 0; j <= 30; j++) { const t = j / 30, x = lerp(-BGM, view.W + BGM, t); pts.push({ x, y: y + Math.sin(Math.PI * t) * 14 + hash(i * 50 + j) * 0.8 }); }
+    dryBrush(c, pts, 6, INK, 0.8, i + 3, flat);
+  });
+  for (const x of [18, view.W - 18]) dryBrush(c, [{ x, y: view.H * 0.41 }, { x, y: view.H * 0.64 }], 13, INK, 0.9, x, flat);
+  const horizon = [];
+  for (let j = 0; j <= 20; j++) horizon.push({ x: lerp(-BGM, view.W + BGM, j / 20), y: view.H * 0.64 + hash(j + 9) });
+  dryBrush(c, horizon, 4, INK, 0.45, 7, flat);
 }
 
-function drawOpponent(p, ox, oy) {
-  const k = view.k;
+// The red brush circle that grows behind him as a big swing winds up
+function drawEnso(nb) {
+  const m = game.moves.find(m => m.type === 'heavy' && !m.cancelled && nb >= m.tellStart && nb <= m.hit + 0.1);
+  if (!m) return;
+  const u = clamp((nb - m.tellStart) / TELL.heavy, 0, 1), R = 108 * view.k, pts = [], sweep = 5.7 * easeOut(u), n = 40;
+  for (let i = 0; i <= n; i++) {
+    const a = -2.4 + sweep * i / n, r = R * (1 + 0.035 * hash(i * 7.3));
+    pts.push({ x: headPos.x + Math.cos(a) * r, y: headPos.y + 20 + Math.sin(a) * r });
+  }
+  dryBrush(g, pts, 26 * view.k, RED, 0.9, 3, t => 1 - 0.7 * t);
+}
+
+function drawOpponent(p, ox, oy, vel) {
+  const k = view.k, seed = Math.floor(performance.now() / 90);
   g.save();
   g.translate(200 + ox + p.x * k, view.H * 0.34 + oy + p.y * k);
   g.scale(k, k);
   g.translate(0, 220); g.rotate(p.rot); g.translate(0, -220); // lean from the hips
-  // Shapes go in layers (body, then each arm), and each layer gets its own outline,
-  // so arms stay readable when they cross in front of the body.
+  const toCam = (x, y) => camInv.transformPoint(g.getTransform().transformPoint({ x, y }));
+  // Shapes go in layers (body, then each arm). Each arm gets a thin paper-coloured edge,
+  // so arms stay readable when they cross in front of the solid-ink body.
   let shapes = [];
   const layers = [shapes], gloves = [];
-  const poly = (pts, fill) => shapes.push({ fill, build() { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); } });
-  const ell = (x, y, rx, ry, fill, r = 0) => shapes.push({ fill, build() { g.beginPath(); g.ellipse(x, y, rx, ry, r, 0, Math.PI * 2); } });
+  const poly = (pts, fill) => shapes.push({ fill, build: sd => roughPolyPath(g, pts, sd) });
+  const ell = (x, y, rx, ry, fill, r = 0) => shapes.push({ fill, build: sd => roughEllPath(g, x, y, rx, ry, r, sd) });
   const limb = (x1, y1, x2, y2, w1, w2, fill) => {
     const a = Math.atan2(y2 - y1, x2 - x1), nx = -Math.sin(a), ny = Math.cos(a);
     poly([x1 + nx * w1 / 2, y1 + ny * w1 / 2, x2 + nx * w2 / 2, y2 + ny * w2 / 2, x2 - nx * w2 / 2, y2 - ny * w2 / 2, x1 - nx * w1 / 2, y1 - ny * w1 / 2], fill);
@@ -406,11 +583,12 @@ function drawOpponent(p, ox, oy) {
   // head (flat-top, ears, square jaw), tilted by the pose
   const hx = p.hx, hy = -66 + p.hy, c = Math.cos(p.hr), s = Math.sin(p.hr);
   const H = (pts) => pts.map((v, i) => i % 2 ? hy + pts[i - 1] * s + v * c : hx + v * c - pts[i + 1] * s);
-  const hp = (x, y) => [hx + x * c - y * s, hy + x * s + y * c];
+  const hp = (x, y) => ({ x: hx + x * c - y * s, y: hy + x * s + y * c });
   ell(hx, hy, 31, 38, 'body', p.hr);
   poly(H([-27, 6, 27, 6, 18, 38, -18, 38]), 'body');
   poly(H([-33, -47, 33, -47, 31, -22, -31, -22]), 'body');
-  for (const side of [-1, 1]) { const [ex, ey] = hp(side * 31, 4); ell(ex, ey, 6, 10, 'body', p.hr); }
+  for (const side of [-1, 1]) { const e = hp(side * 31, 4); ell(e.x, e.y, 6, 10, 'body', p.hr); }
+  headPos = toCam(hx, hy);
   // arms reach for the gloves; the closer glove is drawn on top
   const arm = (side, gx, gy, gs) => {
     const sx = side * 70, sy = 12, L1 = 72, L2 = 64;
@@ -420,55 +598,82 @@ function drawOpponent(p, ox, oy) {
     const e = e1[1] > e2[1] ? e1 : e2; // elbows bend downwards
     limb(sx, sy, e[0], e[1], 30, 25, 'body');
     limb(e[0], e[1], gx, gy, 24, 19 * Math.pow(gs, 0.6), 'body');
+    // fast gloves stretch along their path (a smear frame)
+    const [vx, vy] = vel[side < 0 ? 'l' : 'r'], sp = Math.hypot(vx, vy), st = 1 + Math.min(sp / 900, 1);
     const gf = p.glow > 0.3 && side < 0 ? 'hot' : 'glove';
-    ell(gx, gy, 25 * gs, 23 * gs, gf);
+    ell(gx, gy, 25 * gs * st, 23 * gs / Math.sqrt(st), gf, sp > 1 ? Math.atan2(vy, vx) : 0);
     ell(gx - side * 17 * gs, gy - 3 * gs, 9 * gs, 12 * gs, gf);
-    gloves.push({ x: gx, y: gy, s: gs });
+    gloves.push({ x: gx, y: gy, s: gs, side });
+    if (!frozenNow) {
+      const tr = trails[side < 0 ? 'l' : 'r'];
+      const pt = toCam(gx, gy); tr.push({ x: pt.x, y: pt.y, s: gs * k });
+      if (tr.length > 8) tr.shift();
+    }
   };
   const arms = [[-1, p.lx, p.ly, p.ls], [1, p.rx, p.ry, p.rs]].sort((a, b) => a[3] - b[3]);
   for (const a of arms) { layers.push(shapes = []); arm(...a); }
 
-  // per layer: warm rim light around the outline (orange glow during a big swing), then flat fills
-  g.lineJoin = 'round';
-  const rim = p.glow > 0.01 ? `rgba(255,${Math.round(lerp(214, 140, p.glow))},${Math.round(lerp(170, 50, p.glow))},${lerp(0.55, 1, p.glow)})` : 'rgba(255,214,170,0.55)';
-  layers.forEach((layer, i) => {
-    g.lineWidth = i ? 4 : 6;
-    g.strokeStyle = rim;
-    if (p.glow > 0.01) { g.shadowColor = 'rgba(255,140,40,0.95)'; g.shadowBlur = 36 * p.glow * view.dpr * view.scale; }
-    for (const sh of layer) { sh.build(); g.stroke(); }
-    g.shadowBlur = 0;
-    for (const sh of layer) { sh.build(); g.fillStyle = COLORS[sh.fill]; g.fill(); }
-  });
-  // pass 3: details
-  g.fillStyle = '#ffe9c7';
-  for (const side of [-1, 1]) {
-    g.beginPath();
+  const drawLayer = (layer, li) => {
+    if (li) { g.strokeStyle = PAPER; g.lineWidth = 5; g.lineJoin = 'round'; layer.forEach((sh, i) => { sh.build(seed + li * 50 + i); g.stroke(); }); }
+    layer.forEach((sh, i) => { sh.build(seed + li * 50 + i); g.fillStyle = COLORS[sh.fill]; g.fill(); });
+  };
+  drawLayer(layers[0], 0);
+  // body details: a dry-brush highlight down one side, highlight on the cheek, eyes
+  const arc = u => Math.sin(Math.PI * u);
+  dryBrush(g, [{ x: 68, y: 4 }, { x: 62, y: 40 }, { x: 52, y: 100 }, { x: 46, y: 140 }], 7, PAPER, 0.6, seed, arc);
+  dryBrush(g, [hp(23, -22), hp(27, -4), hp(22, 18)], 4, PAPER, 0.6, seed + 1, arc);
+  g.fillStyle = PAPER;
+  for (const side of [-1, 1]) { // narrow, angry eye slits
     const pts = H([side * 21, -10, side * 5, -5, side * 5, -1, side * 20, -5]);
-    g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
-    g.fill();
+    g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.fill();
   }
-  g.fillStyle = 'rgba(255,255,255,0.13)';
-  for (const gl of gloves) { g.beginPath(); g.ellipse(gl.x - 8 * gl.s, gl.y - 9 * gl.s, 9 * gl.s, 5 * gl.s, -0.6, 0, Math.PI * 2); g.fill(); }
+  for (let li = 1; li < layers.length; li++) drawLayer(layers[li], li);
+  for (const gl of gloves) {
+    dryBrush(g, [{ x: gl.x - 14 * gl.s, y: gl.y - 4 * gl.s }, { x: gl.x - 9 * gl.s, y: gl.y - 12 * gl.s }, { x: gl.x, y: gl.y - 15 * gl.s }], 4 * gl.s, PAPER, 0.55, seed + gl.side, arc);
+  }
   if (p.spark > 0.05) { // glint on the right glove as a jab winds up
     const r = 26 * p.spark;
-    g.fillStyle = `rgba(255,255,255,${p.spark})`;
     g.beginPath();
     g.moveTo(p.rx, p.ry - r); g.lineTo(p.rx + r * 0.18, p.ry - r * 0.18); g.lineTo(p.rx + r, p.ry); g.lineTo(p.rx + r * 0.18, p.ry + r * 0.18);
     g.lineTo(p.rx, p.ry + r); g.lineTo(p.rx - r * 0.18, p.ry + r * 0.18); g.lineTo(p.rx - r, p.ry); g.lineTo(p.rx - r * 0.18, p.ry - r * 0.18);
-    g.fill();
+    g.closePath();
+    g.globalAlpha = p.spark; g.fillStyle = PAPER; g.strokeStyle = INK; g.lineWidth = 2; g.fill(); g.stroke(); g.globalAlpha = 1;
   }
   g.restore();
 }
 
-// Your own gloves, outlined, at the bottom of the screen
+// Dry-brush smears behind fast-moving gloves
+function drawTrails() {
+  for (const key of ['l', 'r']) {
+    const pts = trails[key];
+    if (pts.length < 3) continue;
+    let travel = 0;
+    for (let i = 1; i < pts.length; i++) travel += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (travel < 40) continue;
+    const last = pts[pts.length - 1];
+    dryBrush(g, pts, 44 * last.s, INK, clamp((travel - 40) / 120, 0, 0.6), key === 'l' ? 5 : 6);
+  }
+}
+
+// A brush slash across the screen: the big swing missing you (or landing)
+function drawSlashes(now) {
+  game.slashes = game.slashes.filter(s => now - s.t0 < 0.45);
+  for (const s of game.slashes) {
+    const age = now - s.t0, reveal = clamp(age / 0.1, 0, 1), fade = 1 - clamp((age - 0.15) / 0.3, 0, 1), pts = [];
+    for (let i = 0; i <= Math.round(24 * reveal); i++) { const t = i / 24; pts.push({ x: lerp(-30, 430, t), y: view.H * (0.16 + 0.2 * Math.sin(Math.PI * t)) + s.dy }); }
+    dryBrush(g, pts, 34, RED, 0.85 * fade, s.seed, t => 0.15 + 0.85 * Math.sin(Math.PI * t));
+  }
+}
+
+// Your own gloves: ink outlines on paper, at the bottom of the screen
 function drawPlayer(now, nb, oy) {
-  const H = view.H, pl = game ? game.player : { type: 'idle', t0: -9 }, t = now - pl.t0;
+  const H = view.H, pl = game ? game.player : { type: 'idle', t0: -9 }, t = now - pl.t0, seed = Math.floor(performance.now() / 90);
   const bob = beatDip(nb) * 4;
   let L = { x: 92, y: H * 0.95 + bob, s: 1.3 }, R = { x: 308, y: H * 0.95 + bob, s: 1.3 };
   const to = (a, b, u) => ({ x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), s: lerp(a.s, b.s, u) });
   if (pl.type === 'block' && t < 0.4) {
     const u = t < 0.06 ? easeOut(t / 0.06) : t > 0.3 ? 1 - (t - 0.3) / 0.1 : 1;
-    L = to(L, { x: 165, y: H * 0.66, s: 1.6 }, u); R = to(R, { x: 235, y: H * 0.66, s: 1.6 }, u);
+    L = to(L, { x: 165, y: H * 0.68, s: 1.6 }, u); R = to(R, { x: 235, y: H * 0.68, s: 1.6 }, u);
   }
   if (pl.type === 'punch' && t < 0.2) {
     const u = t < 0.07 ? easeOut(t / 0.07) : 1 - easeIn((t - 0.07) / 0.13), aim = { x: 200 + pl.side * 22, y: H * 0.34, s: 0.75 };
@@ -478,19 +683,15 @@ function drawPlayer(now, nb, oy) {
   g.save();
   g.translate(0, oy);
   g.lineJoin = 'round';
+  g.fillStyle = PAPER; g.strokeStyle = INK; g.lineWidth = 3.5;
   for (const [gl, side] of [[L, -1], [R, 1]]) {
     // the arm runs back to your shoulder below the screen, narrowing towards the glove (perspective)
     const ex = 200 + side * 150, ey = H + 60, a = Math.atan2(ey - gl.y, ex - gl.x), nx = -Math.sin(a), ny = Math.cos(a);
-    const w1 = 28 * gl.s, w2 = 70;
-    g.beginPath();
-    g.moveTo(gl.x + nx * w1 / 2, gl.y + ny * w1 / 2); g.lineTo(ex + nx * w2 / 2, ey + ny * w2 / 2);
-    g.lineTo(ex - nx * w2 / 2, ey - ny * w2 / 2); g.lineTo(gl.x - nx * w1 / 2, gl.y - ny * w1 / 2); g.closePath();
-    g.fillStyle = '#1a1f3d'; g.strokeStyle = 'rgba(255,246,234,0.8)'; g.lineWidth = 3;
+    const w1 = 28 * gl.s, w2 = 70, sd = seed + side * 7;
+    roughPolyPath(g, [gl.x + nx * w1 / 2, gl.y + ny * w1 / 2, ex + nx * w2 / 2, ey + ny * w2 / 2, ex - nx * w2 / 2, ey - ny * w2 / 2, gl.x - nx * w1 / 2, gl.y - ny * w1 / 2], sd, 1.2);
     g.fill(); g.stroke();
-    g.beginPath(); g.ellipse(gl.x, gl.y, 30 * gl.s, 27 * gl.s, 0, 0, Math.PI * 2);
-    g.fill(); g.stroke();
-    g.beginPath(); g.ellipse(gl.x - side * 20 * gl.s, gl.y - 4 * gl.s, 10 * gl.s, 14 * gl.s, 0, 0, Math.PI * 2);
-    g.fill(); g.stroke();
+    roughEllPath(g, gl.x, gl.y, 30 * gl.s, 27 * gl.s, 0, sd + 1, 1.2); g.fill(); g.stroke();
+    roughEllPath(g, gl.x - side * 20 * gl.s, gl.y - 4 * gl.s, 10 * gl.s, 14 * gl.s, 0, sd + 2, 1); g.fill(); g.stroke();
   }
   g.restore();
 }
@@ -498,97 +699,109 @@ function drawPlayer(now, nb, oy) {
 function drawZones(now) {
   const { W, H } = view, split = H * ZONE_SPLIT;
   const zones = [
-    ['block', 0, 0, W / 2, split, '242,160,170', 'BLOCK'],
-    ['attack', W / 2, 0, W / 2, split, '140,190,240', 'ATTACK'],
-    ['dodge', 0, split, W, H - split, '150,220,160', 'DODGE'],
+    ['block', 0, 0, W / 2, split, '120,140,200', 'BLOCK'],
+    ['attack', W / 2, 0, W / 2, split, '179,38,44', 'ATTACK'],
+    ['dodge', 0, split, W, H - split, '60,140,90', 'DODGE'],
   ];
   for (const [id, x, y, w, h, rgb, label] of zones) {
     const flash = game ? Math.max(0, 1 - (now - (game.flashes[id] || -9)) / 0.25) : 0;
     if (!settings.zones && flash <= 0) continue;
-    g.fillStyle = `rgba(${rgb},${0.05 + flash * 0.22})`;
+    g.fillStyle = `rgba(${rgb},${0.05 + flash * 0.16})`;
     g.fillRect(x, y, w, h);
     if (!settings.zones) continue;
-    g.strokeStyle = `rgba(${rgb},0.35)`; g.lineWidth = 1.5;
+    g.strokeStyle = 'rgba(21,18,15,0.18)'; g.lineWidth = 1.5;
     g.strokeRect(x + 4, y + 4, w - 8, h - 8);
-    g.fillStyle = `rgba(${rgb},0.75)`;
-    g.font = '700 13px system-ui, sans-serif'; g.textAlign = 'center';
-    g.fillText(label, x + w / 2, y + h - 14);
+    g.fillStyle = 'rgba(21,18,15,0.5)';
+    g.font = `15px ${FONT}`; g.textAlign = 'center';
+    g.fillText(label, x + w / 2, y + h - 12);
   }
 }
 
 function drawHud() {
-  const W = view.W;
-  const bar = (x, w, frac, rgb, label, alignRight) => {
-    g.fillStyle = 'rgba(11,14,28,0.6)'; g.fillRect(x - 2, 14, w + 4, 14);
-    g.fillStyle = `rgb(${rgb})`;
-    const fw = w * frac; g.fillRect(alignRight ? x + w - fw : x, 16, fw, 10);
-    g.fillStyle = '#fff6ea'; g.font = '700 11px system-ui, sans-serif'; g.textAlign = alignRight ? 'right' : 'left';
-    g.fillText(label, alignRight ? x + w : x, 44);
+  const W = view.W, seed = Math.floor(performance.now() / 90);
+  const bar = (x, w, frac, color, label, alignRight, sd) => {
+    const fw = Math.max(0, w * frac);
+    g.fillStyle = color;
+    if (fw > 1) { roughPolyPath(g, [alignRight ? x + w - fw : x, 16, alignRight ? x + w : x + fw, 16, alignRight ? x + w : x + fw, 27, alignRight ? x + w - fw : x, 27], sd, 0.8); g.fill(); }
+    g.strokeStyle = INK; g.lineWidth = 2;
+    roughPolyPath(g, [x - 2, 14, x + w + 2, 14, x + w + 2, 29, x - 2, 29], sd + 3, 0.8); g.stroke();
+    g.fillStyle = INK; g.font = `13px ${FONT}`; g.textAlign = alignRight ? 'right' : 'left';
+    g.fillText(label, alignRight ? x + w : x, 46);
   };
-  bar(14, 150, game.me / 100, '120,220,200', 'YOU', false);
-  bar(W - 164, 150, game.foe / FOE_HP, '255,150,150', 'THE METRONOME', true);
+  bar(14, 150, game.me / 100, INK, 'YOU', false, seed);
+  bar(W - 164, 150, game.foe / FOE_HP, RED, 'THE METRONOME', true, seed + 9);
 }
 
 function drawTexts(now) {
-  const H = view.H, rows = { low: 0, big: 0, teach: 0 };
+  const H = view.H, rows = { low: 0, big: 0, teach: 0, combo: 0 };
   game.texts = game.texts.filter(x => now - x.t0 < x.life);
   g.textAlign = 'center';
   for (const x of game.texts) {
-    const age = (now - x.t0) / x.life, alpha = age < 0.8 ? 1 : 1 - (age - 0.8) / 0.2;
+    const age = (now - x.t0) / x.life, alpha = age < 0.75 ? 1 : 1 - (age - 0.75) / 0.25;
     const row = rows[x.where]++;
-    let y = x.where === 'big' ? H * 0.42 : x.where === 'teach' ? H * 0.71 : H * 0.84 - row * 34 - age * 20;
-    const size = x.where === 'big' ? 64 * (1 + Math.max(0, 0.15 - age)) : x.size;
-    g.font = `800 ${size}px system-ui, sans-serif`;
+    let px = 200, y;
+    if (x.where === 'big') y = H * 0.42;
+    else if (x.where === 'teach') y = H * 0.69;
+    else if (x.where === 'combo') { px = clamp(headPos.x + 95, 50, 350); y = headPos.y - 40 - age * 30; }
+    else y = H * 0.84 - row * 34 - age * 20;
+    const pop = Math.max(0, 0.15 - age * 0.6);
+    const size = (x.where === 'big' ? (x.size > 30 ? x.size : 64) : x.size) * (1 + pop);
     g.globalAlpha = Math.max(0, alpha);
     const lines = x.text.split('\n');
     if (x.where === 'teach') {
-      g.fillStyle = 'rgba(11,14,28,0.78)';
-      const bw = 360, bh = lines.length * 22 + 18;
-      g.beginPath(); g.roundRect(20, y - 22, bw, bh, 12); g.fill();
-    }
+      g.fillStyle = 'rgba(21,18,15,0.88)';
+      g.beginPath(); g.roundRect(20, y - 21, 360, lines.length * 21 + 16, 10); g.fill();
+      g.font = `700 ${size}px system-ui, sans-serif`;
+    } else g.font = `${size}px ${FONT}`;
     for (const line of lines) {
-      g.lineWidth = 5; g.strokeStyle = 'rgba(11,14,28,0.85)';
-      if (x.where !== 'teach') g.strokeText(line, 200, y);
-      g.fillStyle = x.color; g.fillText(line, 200, y);
-      y += 22;
+      if (x.where !== 'teach') { g.lineWidth = 6; g.strokeStyle = PAPER; g.lineJoin = 'round'; g.strokeText(line, px, y); }
+      g.fillStyle = x.color; g.fillText(line, px, y);
+      y += 21;
     }
     g.globalAlpha = 1;
   }
 }
 
-let lastFrame = performance.now();
+let lastFrame = performance.now(), prevDrawn = { ...pose }, vel = { l: [0, 0], r: [0, 0] };
 function frame(ts) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (ts - lastFrame) / 1000);
   lastFrame = ts;
   if (mode === 'fight' && game && !paused) update();
   const now = clock(), nb = game ? beatAt(now) : now / 0.6;
-  const target = game ? targetPose(now, nb) : bobbing(nb);
-  if (!paused) pose = mix(pose, target, 1 - Math.exp(-dt * 28));
+  frozenNow = paused || (!!game && ts / 1000 < game.hitStop); // the tiny freeze on a landed punch
+  if (!frozenNow) {
+    pose = mix(pose, game ? targetPose(now, nb) : bobbing(nb), 1 - Math.exp(-dt * 28));
+    if (game) { stepKnock(dt); stepInk(dt); game.zoom *= Math.exp(-dt * 7); game.shake = Math.max(0, game.shake - dt * 4); }
+  }
+  const kn = game && game.knock;
+  const drawn = kn ? { ...pose, x: pose.x + kn.x, y: pose.y + kn.y, rot: pose.rot + clamp(kn.rot, -0.6, 0.6), hr: pose.hr + clamp(kn.hr, -0.9, 0.9) } : pose;
+  if (!frozenNow && dt > 0) {
+    vel = { l: [(drawn.lx - prevDrawn.lx) / dt, (drawn.ly - prevDrawn.ly) / dt], r: [(drawn.rx - prevDrawn.rx) / dt, (drawn.ry - prevDrawn.ry) / dt] };
+    prevDrawn = drawn;
+  }
 
   // ducking moves the camera down, so the world rises
-  const pl = game && game.player, dt2 = pl ? now - pl.t0 : 9;
-  const duck = pl && pl.type === 'dodge' && dt2 < 0.42 ? Math.sin(Math.PI * dt2 / 0.42) : 0;
+  const pl = game && game.player, since = pl ? now - pl.t0 : 9;
+  const duck = pl && pl.type === 'dodge' && since < 0.42 ? Math.sin(Math.PI * since / 0.42) : 0;
   let sx = 0, sy = 0;
-  if (game && game.shake > 0) { sx = (Math.random() - 0.5) * 16 * game.shake; sy = (Math.random() - 0.5) * 16 * game.shake; if (!paused) game.shake = Math.max(0, game.shake - dt * 4); }
+  if (game && game.shake > 0) { sx = (Math.random() - 0.5) * 16 * game.shake; sy = (Math.random() - 0.5) * 16 * game.shake; }
 
-  const s = view.dpr * view.scale;
+  const s = view.dpr * view.scale, z = 1 + (game ? game.zoom : 0), fy = view.H * 0.3;
   g.setTransform(s, 0, 0, s, 0, 0);
-  g.clearRect(0, 0, view.W, view.H);
   g.save();
-  g.translate(sx, sy);
-  drawBackground(0, -duck * 30);
-  drawOpponent(pose, 0, -duck * 70);
+  g.translate(200 + sx, fy + sy); g.scale(z, z); g.translate(-200, -fy);
+  camInv = g.getTransform().invertSelf();
+  g.drawImage(bg, -BGM, -BGM - duck * 30, view.W + BGM * 2, view.H + BGM * 2);
+  if (game) drawEnso(nb);
+  drawOpponent(drawn, 0, -duck * 70, vel);
+  if (game) { drawTrails(); drawInk(); drawSlashes(now); }
   drawPlayer(now, nb, duck * 60);
   g.restore();
   if (mode === 'fight' && game) {
     drawZones(now);
     const hurtA = Math.max(0, 1 - (now - game.hurtAt) / 0.35);
-    if (hurtA > 0) {
-      const v = g.createRadialGradient(200, view.H / 2, view.H * 0.25, 200, view.H / 2, view.H * 0.7);
-      v.addColorStop(0, 'rgba(255,90,110,0)'); v.addColorStop(1, `rgba(255,90,110,${0.55 * hurtA})`);
-      g.fillStyle = v; g.fillRect(0, 0, view.W, view.H);
-    }
+    if (hurtA > 0) { g.fillStyle = `rgba(179,38,44,${0.22 * hurtA})`; g.fillRect(0, 0, view.W, view.H); }
     drawHud();
     drawTexts(now);
   }
@@ -625,7 +838,7 @@ function showEnd() {
   $('#endStats').innerHTML = [
     ['Fight length', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`],
     ['Perfect timing', st.perfect], ['Jabs blocked', st.blocks], ['Swings dodged', st.dodges],
-    ['Punches on the beat', `${st.onBeat} of ${st.punches}`], ['Hits taken', st.hitsTaken],
+    ['Punches on the beat', `${st.onBeat} of ${st.punches}`], ['Full measures', st.measures], ['Hits taken', st.hitsTaken],
   ].map(([k, v]) => `<li>${k}: <b>${v}</b></li>`).join('');
   show('end');
 }
@@ -655,7 +868,7 @@ function drawCal() {
   const now = ctx.currentTime, i = (now - cal.t0) / CAL_SPB;
   const ring = $('#calRing'), d = i - Math.round(i);
   ring.style.transform = `scale(${i >= -0.2 && i < CAL_LEAD + CAL_CLICKS ? 1 + 0.35 * Math.exp(-d * d * 60) : 1})`;
-  ring.style.borderColor = i < CAL_LEAD - 0.5 ? '#c9c3d8' : '#ffb35c';
+  ring.style.borderColor = i < CAL_LEAD - 0.5 ? WASH : RED;
   if (i >= CAL_LEAD - 0.5 && i < CAL_LEAD + CAL_CLICKS && !cal.done) $('#calMsg').textContent = `Tap along! ${cal.taps.length} taps`;
   if (!cal.done && i > CAL_LEAD + CAL_CLICKS + 0.5) finishCal();
 }
@@ -706,6 +919,7 @@ $('#soundBtn').onclick = () => { settings.sound = !settings.sound; store.set('so
 $('#zonesBtn').onclick = () => { settings.zones = !settings.zones; store.set('zones', settings.zones); refreshMenu(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 window.addEventListener('resize', resize);
+if (document.fonts) document.fonts.load(`20px ${FONT}`).catch(() => {});
 
 resize();
 refreshMenu();
