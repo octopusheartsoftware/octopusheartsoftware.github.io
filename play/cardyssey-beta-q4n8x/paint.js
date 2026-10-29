@@ -4,8 +4,8 @@
 //
 // It paints cards (white paper, CARD_W × CARD_H) and items (see-through paper, square), so the
 // eraser makes white on cards and makes holes on items.
-import { CARD_W, CARD_H } from './model.js';
-import { stampImage } from './stamps.js';
+import { CARD_W, CARD_H } from './model.js?v=mvu71pwg';
+import { stampImage } from './stamps.js?v=mvu71pwg';
 
 const UNDO_LIMIT = 30;
 const FILL_TOLERANCE = 96; // how different a neighbouring color can be and still get filled

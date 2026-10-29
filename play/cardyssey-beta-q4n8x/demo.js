@@ -1,8 +1,8 @@
 // A small example adventure, drawn in code from the stamp library. It shows props and changes:
 // the hallway is one card, and its door is a prop with a "Shut" and an "Open" look. Using the key
 // on the door switches the door to "Open" and turns on the doorway button that leads inside.
-import { CARD_W, CARD_H, ITEM_SIZE, uid, newCard, newItem, newProp, newLook, newButton, newAdventure } from './model.js';
-import { stampImage } from './stamps.js';
+import { CARD_W, CARD_H, ITEM_SIZE, uid, newCard, newItem, newProp, newLook, newButton, newAdventure } from './model.js?v=mvu71pwg';
+import { stampImage } from './stamps.js?v=mvu71pwg';
 
 const FONT = '500 34px Lexend, "Segoe UI", sans-serif';
 const DOOR = { x: 280, y: 64, size: 400 };                    // where the door prop sits on the hallway

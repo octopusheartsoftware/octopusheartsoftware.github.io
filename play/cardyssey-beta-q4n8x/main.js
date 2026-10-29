@@ -4,17 +4,17 @@ import {
   CARD_W, CARD_H, ITEM_SIZE, MAX_CARDS, MAX_ITEMS, MAX_PROPS, MAX_LOOKS, uid, newCard, newItem, newProp, newLook, newButton,
   newAdventure, normalize, cardById, itemById, propById, lookById, buttonById, nextCardName, nextItemName, nextPropName,
   nextLookName, copyCard, buttonDoesSomething, buttonName, changeText, cardPreview, bounds, shapeSvg, esc, cleanAdventure,
-} from './model.js';
-import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js';
-import { Painter } from './paint.js';
-import { renderMap, findProblems } from './map.js';
-import { createPlayer } from './play.js';
-import { SOUNDS, playSound } from './sounds.js';
-import { STAMPS, stampSvg } from './stamps.js';
-import { buildDemo } from './demo.js';
-import { buildKitten, buildPizza, buildAlien } from './examples.js';
-import { createTour } from './tour.js';
-import { icon } from './icons.js';
+} from './model.js?v=mvu71pwg';
+import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvu71pwg';
+import { Painter } from './paint.js?v=mvu71pwg';
+import { renderMap, findProblems } from './map.js?v=mvu71pwg';
+import { createPlayer } from './play.js?v=mvu71pwg';
+import { SOUNDS, playSound } from './sounds.js?v=mvu71pwg';
+import { STAMPS, stampSvg } from './stamps.js?v=mvu71pwg';
+import { buildDemo } from './demo.js?v=mvu71pwg';
+import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvu71pwg';
+import { createTour } from './tour.js?v=mvu71pwg';
+import { icon } from './icons.js?v=mvu71pwg';
 
 const VERSION = '0.6.0';
 const FEEDBACK_EMAIL = 'support@octopusheartsoftware.com';

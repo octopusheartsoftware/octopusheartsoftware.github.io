@@ -3,8 +3,8 @@
 // - "Pizza Night": a first-timer drawing by hand, wobbly lines and scribbly coloring
 // - "Solace": a confident artist with a pen on a tablet, a quiet alien world in flat, layered shapes
 // Randomness is seeded, so every copy looks the same.
-import { CARD_W, CARD_H, ITEM_SIZE, uid, newCard, newItem, newProp, newLook, newButton, newAdventure } from './model.js';
-import { canvas, stamp, words } from './demo.js';
+import { CARD_W, CARD_H, ITEM_SIZE, uid, newCard, newItem, newProp, newLook, newButton, newAdventure } from './model.js?v=mvu71pwg';
+import { canvas, stamp, words } from './demo.js?v=mvu71pwg';
 
 const W = CARD_W, H = CARD_H;
 const go = (props) => newButton(props);
