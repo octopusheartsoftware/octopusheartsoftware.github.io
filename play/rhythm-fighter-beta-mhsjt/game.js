@@ -18,6 +18,23 @@ const settings = { bpm: store.get('bpm', 100), offset: store.get('offset', 0), z
 const PERFECT = 0.07, OK = 0.16;          // seconds either side of the moment a punch lands
 const ON_BEAT = 0.09;                      // a punch this close to a beat counts as on the beat
 const ZONE_SPLIT = 0.76;                   // Dodge strip starts this far down the screen
+const FLOW_STRIP = 0.1;                    // the Flow strip along the top (at least 86 units tall)
+// Flow: landing hits fills the Rhythm bar; when it's full, tap the top strip for 3 rhythm combos.
+const FLOW_OK = 0.1;                       // seconds either side of each half-beat in a Flow combo
+const RHYTHM = { offBeat: 4, chain: 8, measure: 15, block: 3, perfectBlock: 10, dodge: 6, perfectDodge: 12, hurt: -15 };
+const FLOW_DMG = { arrow: 2, finish: 8 };  // per arrow, plus a finishing blow for completing a combo
+// Flow combos: 8 half-beats each. L = Block zone (←), R = Attack zone (→), D = Dodge strip (↓), . = rest.
+// Rename or rewrite these freely; each Flow picks 3 at random.
+const COMBOS = [
+  ['Method Madness', 'RLRLDDR.'],
+  ['Four on the Floor', 'D.D.D.D.'],
+  ['Double Time', 'LLRRLLRR'],
+  ['Syncopation', 'L.RL.RD.'],
+  ['Call and Response', 'LLR.RRL.'],
+  ['Ghost Notes', 'L.LR.RLD'],
+  ['Drop', 'LRLR.DD.'],
+  ['Crescendo', 'L.R.LRDD'],
+];
 // Punching in an opening: off-beat punches do a little; on-beat punches build a chain (1, 2, 3)
 // that keeps him open, and the 4th beat in a row is a FULL MEASURE finisher.
 const DMG = { jab: 7, heavy: 20, guardBreak: 10, offBeat: 3, chain: [4, 5, 6], measure: 12 };
@@ -108,6 +125,7 @@ const sfx = {
   },
   guarded(t) { tone(t, 'square', 300, 200, 0.05, 0.12); noise(t, 0.04, 0.2, 'highpass', 3000); },
   bell(t) { for (const [f, v] of [[880, 0.3], [1320, 0.15], [2200, 0.07]]) tone(t, 'sine', f, f, 1.6, v); },
+  flowIn(t) { noise(t, 0.5, 0.3, 'bandpass', 500, 6000, 2); tone(t, 'triangle', 660, 1320, 0.4, 0.2); },
   thud(t) { tone(t, 'sine', 90, 30, 0.5, 0.6); noise(t, 0.3, 0.3, 'lowpass', 600, 100); },
 };
 const BASSLINE = [55, 55, 65.4, 55, 73.4, 55, 65.4, 49];
@@ -160,12 +178,12 @@ function newGame() {
     spb, start: ctx.currentTime + 0.4, moves: [], nextFill: 4, phrase: OPENING.join('').split(''), lastPhrase: '',
     stunUntil: -1, me: 100, foe: FOE_HP, musicBeat: 0, lastCount: -1,
     player: { type: 'idle', t0: -9, side: 1 }, punchSide: 1, busyUntil: 0, punchReady: 0,
-    chain: 0, chainBeat: -9,
+    chain: 0, chainBeat: -9, rhythm: 0, flow: null,
     knock: { x: 0, y: 0, rot: 0, hr: 0, vx: 0, vy: 0, vrot: 0, vhr: 0 }, // springy knockback on top of his pose
     hitStop: 0, zoom: 0, ink: [], slashes: [],
     hitReact: -9, hitSide: 1, guardTight: -9, shake: 0, hurtAt: -9, flashes: {}, texts: [],
     over: null, overAt: 0, shown: false,
-    stats: { perfect: 0, blocks: 0, dodges: 0, hitsTaken: 0, punches: 0, onBeat: 0, measures: 0 },
+    stats: { perfect: 0, blocks: 0, dodges: 0, hitsTaken: 0, punches: 0, onBeat: 0, measures: 0, flows: 0, combos: 0 },
   };
   trails.l = []; trails.r = [];
 }
@@ -215,6 +233,8 @@ function act(action) {
   const real = ctx.currentTime, t = real - settings.offset, nb = beatAt(t);
   game.flashes[action] = real;
   if (nb < 3) return; // no fighting during the countdown
+  if (action === 'flow') return game.rhythm >= 100 ? startFlow(nb) : teach('flowEmpty', 'That top strip is for FLOW.\nLand hits to fill the Rhythm bar first.');
+  if (game.flow) return flowInput(action, real, t);
   if (action === 'attack') return attack(real, nb);
   if (real < game.busyUntil) return;
   game.player = { type: action, t0: real, side: 1 };
@@ -233,12 +253,12 @@ function act(action) {
   game.busyUntil = real + 0.25;
   const perfect = best <= PERFECT;
   if (action === 'block' && m.type === 'jab') {
-    sfx.block(real); game.stats.blocks++;
+    sfx.block(real); game.stats.blocks++; gainRhythm(perfect ? RHYTHM.perfectBlock : RHYTHM.block);
     splat(200, view.H * 0.6, 0, -1, 0.4, 'ink');
     if (perfect) { sfx.perfect(real); game.stats.perfect++; say('PERFECT BLOCK'); stun(nb, 1); opening(); }
     else say('BLOCK', { size: 26 });
   } else if (action === 'dodge' && m.type === 'heavy') {
-    sfx.dodge(real); game.stats.dodges++;
+    sfx.dodge(real); game.stats.dodges++; gainRhythm(perfect ? RHYTHM.perfectDodge : RHYTHM.dodge);
     game.slashes.push({ t0: clock(), dy: 0, seed: Math.random() * 99 });
     if (perfect) { sfx.perfect(real); game.stats.perfect++; say('PERFECT DODGE'); stun(nb, 3); }
     else { say('DODGE!'); stun(nb, 2); }
@@ -279,6 +299,7 @@ function attack(real, nb) {
     if (game.chain >= 4) { // FULL MEASURE: a huge hit that knocks him out of the opening
       dmg = DMG.measure; power = 3.2;
       game.chain = 0; game.chainBeat = -9; game.stats.measures++;
+      gainRhythm(RHYTHM.measure);
       openUntil(nb, nb + 0.9, 2);
       sfx.measure(real);
       say('FULL MEASURE!', { where: 'big', color: RED, size: 50, life: 1.2 });
@@ -286,11 +307,13 @@ function attack(real, nb) {
       dmg = DMG.chain[game.chain - 1]; power = 1 + game.chain * 0.45;
       stun(nb, beat + 1.45 - nb); // staying on the beat keeps him open for the next one
       sfx.beatPunch(real, game.chain);
+      gainRhythm(RHYTHM.chain);
       say(String(game.chain), { where: 'combo', color: game.chain === 3 ? RED : INK, size: 40 + game.chain * 12 });
     }
   } else {
     if (!onBeat) { game.chain = 0; game.chainBeat = -9; }
     sfx.punch(real);
+    gainRhythm(RHYTHM.offBeat);
   }
   game.foe = Math.max(0, game.foe - dmg);
   impact(power);
@@ -319,6 +342,7 @@ function hurt(dmg, label, lesson, big) {
   game.shake = big ? 1.2 : 0.8; game.hurtAt = real; game.stats.hitsTaken++;
   game.chain = 0; game.chainBeat = -9;
   sfx.hurt(real);
+  gainRhythm(RHYTHM.hurt);
   say(label, { color: RED });
   splat(-10, view.H * 0.2, 1, 0.25, big ? 1.6 : 0.9, 'red');
   if (big) { splat(410, view.H * 0.2, -1, 0.25, 1.6, 'red'); game.slashes.push({ t0: clock(), dy: view.H * 0.22, seed: Math.random() * 99 }); }
@@ -333,13 +357,78 @@ function hurt(dmg, label, lesson, big) {
 }
 function finish(result) {
   const real = ctx.currentTime;
-  game.over = result; game.overAt = real;
+  game.over = result; game.overAt = real; game.flow = null;
   for (const m of game.moves) if (!m.resolved || m.type === 'taunt') cancel(m);
   if (result === 'win') {
     sfx.bell(real + 0.1);
     splat(headPos.x, headPos.y, -game.punchSide, -0.5, 4, 'mix');
     say('K.O.!', { where: 'big', color: RED, life: 2 });
   } else { sfx.thud(real); say('DOWN!', { where: 'big', color: RED, life: 2 }); }
+}
+
+// ---------- Flow ----------
+function gainRhythm(n) {
+  if (game.flow) return;
+  const was = game.rhythm;
+  game.rhythm = clamp(game.rhythm + n, 0, 100);
+  if (was < 100 && game.rhythm >= 100) {
+    sfx.perfect(clock());
+    say('FLOW READY', { color: RED });
+    teach('flowReady', 'Rhythm bar full! Tap the strip at the top\n(or press ↑) to enter FLOW.');
+  }
+}
+const flowAt = nb => !!game.flow && nb >= game.flow.first && nb < game.flow.end;
+const nextArrow = (pat, from) => { for (let i = from; i < pat.length; i++) if (pat[i] !== '.') return i; return -1; };
+const slotTime = (c, i) => timeAt(c.start + i * 0.5);
+// Flow starts on the next beat: three beats of lead-in, then 3 combos 6 beats apart
+// (2 beats to read the arrows, 4 beats of punching on the half-beats).
+function startFlow(nb) {
+  if (game.flow) return;
+  const first = Math.ceil(nb) + 1, picks = [...COMBOS].sort(() => Math.random() - 0.5).slice(0, 3);
+  game.flow = {
+    first, end: first + 19,
+    combos: picks.map(([name, pattern], i) => ({ name, pattern: pattern.split(''), start: first + 3 + i * 6, hits: [], next: nextArrow(pattern.split(''), 0), state: 'ready' })),
+  };
+  game.rhythm = 0; game.chain = 0; game.chainBeat = -9; game.stats.flows++;
+  openUntil(nb, first + 19, 2);
+  sfx.flowIn(clock());
+  say('FLOW!', { where: 'big', color: RED, size: 64, life: 1 });
+  teach('flow', 'FLOW: punch the arrows as the red line hits them.\n← Block zone    → Attack zone    ↓ Dodge strip');
+}
+function flowInput(action, real, t) {
+  const nb = beatAt(t), c = game.flow.combos.find(c => nb >= c.start - 1 && nb < c.start + 4.5);
+  if (!c || c.state === 'done' || c.state === 'dropped' || c.next < 0) return;
+  if (t < slotTime(c, 0) - FLOW_OK) return; // still reading the arrows
+  const key = { block: 'L', attack: 'R', dodge: 'D' }[action], d = t - slotTime(c, c.next);
+  if (d < -FLOW_OK) return dropCombo(c, 'TOO EARLY');
+  if (d > FLOW_OK) return dropCombo(c, 'MISSED');
+  if (key !== c.pattern[c.next]) return dropCombo(c, 'WRONG WAY');
+  c.hits.push(c.next); c.state = 'live';
+  const side = key === 'L' ? -1 : key === 'R' ? 1 : -game.punchSide;
+  game.punchSide = side;
+  game.player = { type: 'punch', t0: real, side, low: key === 'D' };
+  game.stats.punches++;
+  c.next = nextArrow(c.pattern, c.next + 1);
+  let dmg = FLOW_DMG.arrow, power = 0.9;
+  if (c.next < 0) { // the whole combo landed: finishing blow
+    c.state = 'done'; game.stats.combos++;
+    dmg += FLOW_DMG.finish; power = 3;
+    sfx.measure(real);
+    say(c.name.toUpperCase() + '!', { where: 'big', color: RED, size: 40, life: 1.1 });
+  } else sfx.beatPunch(real, 1 + (c.hits.length % 4));
+  game.foe = Math.max(0, game.foe - dmg);
+  impact(power);
+  if (game.foe <= 0) finish('win');
+}
+function dropCombo(c, why) {
+  c.state = 'dropped';
+  sfx.guarded(clock());
+  say(why, { color: WASH, size: 24 });
+}
+function updateFlow(now, nb) {
+  const f = game.flow, t = now - settings.offset;
+  for (const c of f.combos) if ((c.state === 'ready' || c.state === 'live') && c.next >= 0 && t > slotTime(c, c.next) + FLOW_OK) dropCombo(c, 'MISSED');
+  if (nb >= f.end) { game.flow = null; say('FLOW ENDS', { color: WASH, size: 24 }); }
 }
 
 // ---------- Floating words ----------
@@ -360,6 +449,7 @@ function update() {
     if (b >= 0) {
       sfx.kick(t); sfx.hat(t + game.spb / 2);
       if (b >= 4) sfx.bass(t, BASSLINE[b % 8], game.spb * 0.5);
+      if (flowAt(b)) { sfx.hat(t + game.spb / 4); sfx.hat(t + game.spb * 3 / 4); sfx.kick(t + game.spb / 2); } // double time in Flow
     }
     game.musicBeat++;
   }
@@ -372,6 +462,7 @@ function update() {
     return;
   }
   fillAhead(nb);
+  if (game.flow) updateFlow(now, nb);
   // anything not blocked or dodged in time lands
   for (const m of game.moves) {
     if (m.resolved || m.type === 'taunt' || now - settings.offset <= m.time + OK) continue;
@@ -676,7 +767,7 @@ function drawPlayer(now, nb, oy) {
     L = to(L, { x: 165, y: H * 0.68, s: 1.6 }, u); R = to(R, { x: 235, y: H * 0.68, s: 1.6 }, u);
   }
   if (pl.type === 'punch' && t < 0.2) {
-    const u = t < 0.07 ? easeOut(t / 0.07) : 1 - easeIn((t - 0.07) / 0.13), aim = { x: 200 + pl.side * 22, y: H * 0.34, s: 0.75 };
+    const u = t < 0.07 ? easeOut(t / 0.07) : 1 - easeIn((t - 0.07) / 0.13), aim = { x: 200 + pl.side * 22, y: H * (pl.low ? 0.52 : 0.34), s: 0.75 }; // ↓ in Flow is a body blow
     if (pl.side < 0) L = to(L, aim, u); else R = to(R, aim, u);
   }
   if (game && game.over === 'lose') { const u = clamp((now - game.overAt) / 0.6, 0, 1); L.y += u * 200; R.y += u * 200; }
@@ -696,24 +787,64 @@ function drawPlayer(now, nb, oy) {
   g.restore();
 }
 
+const flowStripH = () => Math.max(86, view.H * FLOW_STRIP);
 function drawZones(now) {
-  const { W, H } = view, split = H * ZONE_SPLIT;
+  const { W, H } = view, top = flowStripH(), split = H * ZONE_SPLIT, inFlow = !!game.flow, ready = game.rhythm >= 100 && !inFlow;
   const zones = [
-    ['block', 0, 0, W / 2, split, '120,140,200', 'BLOCK'],
-    ['attack', W / 2, 0, W / 2, split, '179,38,44', 'ATTACK'],
-    ['dodge', 0, split, W, H - split, '60,140,90', 'DODGE'],
+    ['flow', 0, 0, W, top, '179,38,44', ''],
+    ['block', 0, top, W / 2, split - top, '120,140,200', inFlow ? '←' : 'BLOCK'],
+    ['attack', W / 2, top, W / 2, split - top, '179,38,44', inFlow ? '→' : 'ATTACK'],
+    ['dodge', 0, split, W, H - split, '60,140,90', inFlow ? '↓' : 'DODGE'],
   ];
   for (const [id, x, y, w, h, rgb, label] of zones) {
-    const flash = game ? Math.max(0, 1 - (now - (game.flashes[id] || -9)) / 0.25) : 0;
-    if (!settings.zones && flash <= 0) continue;
-    g.fillStyle = `rgba(${rgb},${0.05 + flash * 0.16})`;
+    const flash = Math.max(0, 1 - (now - (game.flashes[id] || -9)) / 0.25);
+    const glow = id === 'flow' && ready ? 0.12 + 0.08 * Math.sin(now * 8) : 0;
+    if (!settings.zones && flash <= 0 && glow <= 0) continue;
+    g.fillStyle = `rgba(${rgb},${0.05 + glow + flash * 0.16})`;
     g.fillRect(x, y, w, h);
     if (!settings.zones) continue;
     g.strokeStyle = 'rgba(21,18,15,0.18)'; g.lineWidth = 1.5;
     g.strokeRect(x + 4, y + 4, w - 8, h - 8);
-    g.fillStyle = 'rgba(21,18,15,0.5)';
-    g.font = `15px ${FONT}`; g.textAlign = 'center';
-    g.fillText(label, x + w / 2, y + h - 12);
+    if (!label) continue;
+    g.textAlign = 'center';
+    if (inFlow) { g.fillStyle = 'rgba(21,18,15,0.3)'; g.font = '700 54px system-ui, sans-serif'; g.fillText(label, x + w / 2, y + h - (id === 'dodge' ? 40 : 30)); }
+    else { g.fillStyle = 'rgba(21,18,15,0.5)'; g.font = `15px ${FONT}`; g.fillText(label, x + w / 2, y + h - 12); }
+  }
+}
+
+// Flying ink streaks while in Flow
+function drawSpeedLines(now, nb) {
+  const f = game.flow, fade = clamp(Math.min(nb - f.first + 1, f.end - nb), 0, 1);
+  if (fade <= 0) return;
+  for (let i = 0; i < 16; i++) {
+    const y = -40 + (hash(i * 3.1) + 1) / 2 * view.H * 0.75, len = 120 + 70 * (hash(i * 5.7) + 1), sp = 900 + 250 * (hash(i * 9.1) + 1);
+    const x = 460 - ((now * sp + (hash(i) + 1) * 400) % 900);
+    dryBrush(g, [{ x, y }, { x: x + len * 0.5, y }, { x: x + len, y }], 4 + 3 * (hash(i * 2.3) + 1), i % 5 === 0 ? RED : INK, 0.55 * fade, i, u => 1 - u * 0.8);
+  }
+}
+
+// The current Flow combo: its name, its arrows, and a red line that sweeps across them in time
+function drawFlowPanel(now) {
+  const f = game.flow, nb = beatAt(now), c = f.combos.find(c => nb < c.start + 4.6);
+  if (!c) return;
+  const top = flowStripH() + 10, sp = 40, x0 = 200 - sp * 3.5;
+  g.fillStyle = 'rgba(239,232,220,0.88)';
+  g.beginPath(); g.roundRect(24, top, 352, 112, 12); g.fill();
+  g.textAlign = 'center'; g.fillStyle = INK; g.font = `26px ${FONT}`;
+  g.fillText(c.name.toUpperCase(), 200, top + 33);
+  g.textAlign = 'right'; g.fillStyle = WASH; g.font = `12px ${FONT}`;
+  g.fillText(`combo ${f.combos.indexOf(c) + 1} of 3`, 366, top + 104);
+  g.textAlign = 'center'; g.font = '900 34px system-ui, sans-serif';
+  c.pattern.forEach((k, i) => {
+    const x = x0 + i * sp, y = top + 78;
+    if (k === '.') { g.fillStyle = 'rgba(21,18,15,0.3)'; g.beginPath(); g.arc(x, y - 10, 3, 0, Math.PI * 2); g.fill(); return; }
+    g.fillStyle = c.hits.includes(i) ? RED : c.state === 'dropped' ? 'rgba(21,18,15,0.22)' : INK;
+    g.fillText({ L: '←', R: '→', D: '↓' }[k], x, y);
+  });
+  const ph = x0 + (nb - c.start) / 0.5 * sp;
+  if (ph > 30 && ph < 370 && c.state !== 'dropped' && c.state !== 'done') {
+    g.strokeStyle = RED; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(ph, top + 46); g.lineTo(ph, top + 92); g.stroke();
   }
 }
 
@@ -730,6 +861,13 @@ function drawHud() {
   };
   bar(14, 150, game.me / 100, INK, 'YOU', false, seed);
   bar(W - 164, 150, game.foe / FOE_HP, RED, 'THE METRONOME', true, seed + 9);
+  // Rhythm bar (drains while Flow lasts)
+  const ready = game.rhythm >= 100 && !game.flow;
+  const fr = game.flow ? clamp((game.flow.end - beatAt(clock())) / 19, 0, 1) : game.rhythm / 100;
+  g.fillStyle = 'rgba(21,18,15,0.12)'; g.fillRect(14, 55, W - 28, 9);
+  g.fillStyle = game.flow || ready ? RED : INK; g.fillRect(14, 55, (W - 28) * fr, 9);
+  g.fillStyle = ready ? RED : INK; g.font = `12px ${FONT}`; g.textAlign = 'center';
+  g.fillText(game.flow ? 'FLOW' : ready ? 'RHYTHM FULL! TAP HERE FOR FLOW' : 'RHYTHM', 200, 78);
 }
 
 function drawTexts(now) {
@@ -794,6 +932,7 @@ function frame(ts) {
   camInv = g.getTransform().invertSelf();
   g.drawImage(bg, -BGM, -BGM - duck * 30, view.W + BGM * 2, view.H + BGM * 2);
   if (game) drawEnso(nb);
+  if (game && game.flow) drawSpeedLines(now, nb);
   drawOpponent(drawn, 0, -duck * 70, vel);
   if (game) { drawTrails(); drawInk(); drawSlashes(now); }
   drawPlayer(now, nb, duck * 60);
@@ -803,6 +942,7 @@ function frame(ts) {
     const hurtA = Math.max(0, 1 - (now - game.hurtAt) / 0.35);
     if (hurtA > 0) { g.fillStyle = `rgba(179,38,44,${0.22 * hurtA})`; g.fillRect(0, 0, view.W, view.H); }
     drawHud();
+    if (game.flow) drawFlowPanel(now);
     drawTexts(now);
   }
   if (cal) drawCal();
@@ -838,7 +978,7 @@ function showEnd() {
   $('#endStats').innerHTML = [
     ['Fight length', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`],
     ['Perfect timing', st.perfect], ['Jabs blocked', st.blocks], ['Swings dodged', st.dodges],
-    ['Punches on the beat', `${st.onBeat} of ${st.punches}`], ['Full measures', st.measures], ['Hits taken', st.hitsTaken],
+    ['Punches on the beat', `${st.onBeat} of ${st.punches}`], ['Full measures', st.measures], ['Flow combos landed', `${st.combos} of ${st.flows * 3}`], ['Hits taken', st.hitsTaken],
   ].map(([k, v]) => `<li>${k}: <b>${v}</b></li>`).join('');
   show('end');
 }
@@ -892,14 +1032,14 @@ function finishCal() {
 // ---------- Input ----------
 function zoneAt(clientX, clientY) {
   const r = canvas.getBoundingClientRect(), x = (clientX - r.left) / view.scale, y = (clientY - r.top) / view.scale;
-  return y > view.H * ZONE_SPLIT ? 'dodge' : x < view.W / 2 ? 'block' : 'attack';
+  return y < flowStripH() ? 'flow' : y > view.H * ZONE_SPLIT ? 'dodge' : x < view.W / 2 ? 'block' : 'attack';
 }
 canvas.addEventListener('pointerdown', e => { e.preventDefault(); act(zoneAt(e.clientX, e.clientY)); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('keydown', e => {
   if (e.repeat) return;
   if (cal && !$('#cal').hidden) { if (e.key === ' ' || e.key.startsWith('Arrow')) { e.preventDefault(); calTap(); } return; }
-  const map = { ArrowLeft: 'block', a: 'block', ArrowRight: 'attack', d: 'attack', ArrowDown: 'dodge', s: 'dodge', ' ': 'dodge' };
+  const map = { ArrowLeft: 'block', a: 'block', ArrowRight: 'attack', d: 'attack', ArrowDown: 'dodge', s: 'dodge', ' ': 'dodge', ArrowUp: 'flow', w: 'flow' };
   if (map[e.key]) { e.preventDefault(); act(map[e.key]); }
   if (e.key === 'Escape' || e.key === 'p') paused ? resumeGame() : pauseGame();
 });
