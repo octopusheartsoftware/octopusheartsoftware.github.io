@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0e1c">
+  <title>Rhythm Fighter test</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <button id="pauseBtn" hidden aria-label="Pause">II</button>
+
+    <section id="menu" class="panel">
+      <p class="kicker">Playable test</p>
+      <h1>Rhythm Fighter</h1>
+      <p class="sub">vs. <strong>The Metronome</strong></p>
+      <button id="fightBtn" class="big">Fight</button>
+      <div class="row"><span>Tempo (BPM)</span>
+        <div class="seg" id="tempo"><button data-bpm="90">90</button><button data-bpm="100">100</button><button data-bpm="120">120</button></div>
+      </div>
+      <div class="row"><span>Sound</span><button class="toggle" id="soundBtn"></button></div>
+      <div class="row"><span>Zone guides</span><button class="toggle" id="zonesBtn"></button></div>
+      <div class="row"><span>Timing <small id="offsetLabel"></small></span><button id="calBtn">Calibrate</button></div>
+      <details>
+        <summary>How to play</summary>
+        <ul>
+          <li><b>Quick jab</b> (a wooden “tock” and a glint on his glove): tap <b>Block</b> as it lands.</li>
+          <li><b>Big swing</b> (a rising whoosh and an orange glow): tap <b>Dodge</b> as it lands. Blocking it breaks your guard.</li>
+          <li>Dodging a big swing, or a perfect block, leaves him <b>open</b>. Tap <b>Attack</b> then. Punches on the beat do double damage.</li>
+          <li>Punching while he’s guarding gets you countered.</li>
+          <li>On a computer: ← Block, → Attack, ↓ or Space to Dodge.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="cal" class="panel" hidden>
+      <h2>Timing check</h2>
+      <p>Phones add a tiny delay to sound and touch. Tap the circle along with the clicks: 4 to get ready, then tap along with the next 12.</p>
+      <button id="calPad" aria-label="Tap here along with the clicks"><span id="calRing"></span></button>
+      <p id="calMsg" class="msg"></p>
+      <div class="buttons"><button id="calStart" class="big">Start</button></div>
+      <div class="buttons"><button id="calReset">Reset to zero</button><button id="calDone">Done</button></div>
+    </section>
+
+    <section id="pause" class="panel" hidden>
+      <h2>Paused</h2>
+      <div class="buttons col"><button id="resumeBtn" class="big">Keep fighting</button><button id="quitBtn">Back to menu</button></div>
+    </section>
+
+    <section id="end" class="panel" hidden>
+      <h2 id="endTitle"></h2>
+      <p id="endSub"></p>
+      <ul id="endStats" class="stats"></ul>
+      <div class="buttons col"><button id="againBtn" class="big">Fight again</button><button id="menuBtn">Menu</button></div>
+    </section>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
