@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Bar by Bar test</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="brand.css">
+  <link rel="stylesheet" href="style.css?v=mvubtql2">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1 class="heading-3">Bar by Bar</h1>
+      <button id="tempoBtn" class="pill" aria-label="Song settings"></button>
+      <button id="settingsBtn" class="icon-btn" aria-label="Settings">⋯</button>
+    </header>
+
+    <div id="strip" aria-label="Song bars. Tap a bar to select it, tap another to stretch the selection.">
+      <canvas id="timeline"></canvas>
+    </div>
+    <p id="status" class="small" aria-live="polite"></p>
+
+    <div id="transport">
+      <button id="playBtn" class="primary"><span class="ic">▶</span><span class="tx">Play</span></button>
+      <button id="keepBtn"><span class="ic">✓</span><span class="tx">Keep</span></button>
+      <button id="undoBtn"><span class="ic">↶</span><span class="tx">Undo</span></button>
+      <button id="clearBtn"><span class="ic">✕</span><span class="tx">Clear</span></button>
+      <button id="eraseBtn"><span class="ic">⌫</span><span class="tx">Erase</span></button>
+    </div>
+
+    <div id="sounds" role="radiogroup" aria-label="Sound"></div>
+
+    <main id="stage">
+      <section id="drumsPanel" class="panel">
+        <div id="pads"></div>
+      </section>
+
+      <section id="keysPanel" class="panel" hidden>
+        <div class="octave">
+          <button id="octUp" class="icon-btn" aria-label="Octave up">▲</button>
+          <span id="octLabel" class="label"></span>
+          <button id="octDown" class="icon-btn" aria-label="Octave down">▼</button>
+        </div>
+        <div id="keyboard"></div>
+      </section>
+
+      <section id="voicePanel" class="panel" hidden>
+        <div class="fx">
+          <label>Reverb <input type="range" id="fxReverb" min="0" max="1" step="0.05"></label>
+          <label>Echo <input type="range" id="fxEcho" min="0" max="1" step="0.05"></label>
+          <label class="check"><input type="checkbox" id="fxRadio"> Radio</label>
+          <p class="small muted">Headphones help: without them the mic hears the music too.</p>
+        </div>
+        <button id="recBtn" aria-label="Record"><span></span></button>
+      </section>
+    </main>
+
+    <nav id="tabs">
+      <button data-inst="drums">Drums</button>
+      <button data-inst="bass">Bass</button>
+      <button data-inst="lead">Lead</button>
+      <button data-inst="voice">Voice</button>
+    </nav>
+  </div>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2 class="heading-2">Song</h2>
+      <div class="row"><span>Tempo</span>
+        <div class="stepper"><button type="button" id="bpmDown" aria-label="Slower">−</button><output id="bpmOut"></output><button type="button" id="bpmUp" aria-label="Faster">+</button></div>
+      </div>
+      <p class="small muted">Voice recordings don't stretch if you change the tempo later.</p>
+      <div class="row"><span>Length</span>
+        <select id="barsSel"><option>8</option><option>16</option><option>32</option><option>64</option></select>
+      </div>
+      <div class="row"><label for="clickChk">Click while looping</label><input type="checkbox" id="clickChk"></div>
+      <div class="row"><label for="snapChk">Snap notes to the beat</label><input type="checkbox" id="snapChk"></div>
+      <details>
+        <summary>How it works</summary>
+        <ol class="small">
+          <li>Tap a bar in the strip. Tap another to stretch the selection.</li>
+          <li>Press Play. Those bars loop over and over.</li>
+          <li>Play along. What you play comes back each time round, and you can add more.</li>
+          <li>Press Keep when you like it. Then pick other bars or another instrument.</li>
+        </ol>
+        <p class="small muted">On a computer: Space plays or stops, Enter keeps. Drums: Q W E R / A S D F. Keys: A W S E D F T G Y H U J, with Z and X for octaves.</p>
+      </details>
+      <div class="row end">
+        <button type="button" id="newSongBtn" class="danger-btn">Start a new song</button>
+        <button class="primary">Done</button>
+      </div>
+      <p class="small muted">Test build v<span id="ver"></span>. Your song stays on this device.</p>
+    </form>
+  </dialog>
+
+  <dialog id="confirm">
+    <form method="dialog">
+      <p id="confirmText"></p>
+      <div class="row end">
+        <button value="no">Cancel</button>
+        <button value="yes" class="primary" id="confirmYes"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js?v=mvubtql2"></script>
+</body>
+</html>
