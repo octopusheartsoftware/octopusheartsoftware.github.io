@@ -51,3 +51,7 @@ details b { color: var(--ink); }
 
 .stats { list-style: none; padding: 0; margin: 0; color: var(--dim); line-height: 1.7; }
 .stats b { color: var(--ink); }
+
+/* Send feedback: a quiet link-style button on the menu, and the shared feedback panel in ink on paper */
+button.quiet { border: 0; padding: 6px 10px; text-decoration: underline; color: var(--dim); }
+:root { --ohfb-bg: var(--paper); --ohfb-ink: var(--ink); --ohfb-muted: var(--dim); --ohfb-accent: var(--ink); --ohfb-on-accent: var(--paper); --ohfb-line: var(--line); }

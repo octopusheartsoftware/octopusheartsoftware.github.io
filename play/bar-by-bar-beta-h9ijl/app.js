@@ -833,6 +833,7 @@ $('#newSongBtn').onclick = async () => {
   render();
 };
 $('#ver').textContent = VERSION;
+$('#feedbackBtn').onclick = () => { $('#settings').close(); OHFeedback.open({ app: 'Bar by Bar', version: VERSION }); };
 
 // ---------- Computer keyboard (for testing on a laptop) ----------
 const PIANO_KEYS = 'awsedftgyhuj', DRUM_KEYS = 'qwerasdf';

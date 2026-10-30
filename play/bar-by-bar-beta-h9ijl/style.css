@@ -135,3 +135,6 @@ dialog .row button, dialog form > .row.end button { padding: var(--space-2) var(
 details { margin-top: var(--space-4); }
 summary { cursor: pointer; font-weight: 600; }
 details ol { padding-left: var(--space-6); }
+
+/* "Send feedback" link in the settings dialog */
+dialog .link-btn { background: none !important; border: 0; padding: 0; font: inherit; color: var(--link); text-decoration: underline; cursor: pointer; }

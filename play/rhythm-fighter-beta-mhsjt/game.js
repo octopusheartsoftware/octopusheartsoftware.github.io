@@ -4,6 +4,7 @@
 // Look: pen and ink on paper. Solid ink shapes with hand-drawn edges that gently "boil",
 // dry-brush smears behind fast movement, and ink splatters on hits. Red ink only means danger or impact.
 
+const VERSION = '0.1'; // sent with feedback; bump when a test build changes a lot
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), canvas = $('#game'), g = canvas.getContext('2d');
 
@@ -1056,7 +1057,7 @@ function zoneAt(clientX, clientY) {
 canvas.addEventListener('pointerdown', e => { e.preventDefault(); act(zoneAt(e.clientX, e.clientY)); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('keydown', e => {
-  if (e.repeat) return;
+  if (e.repeat || document.querySelector('dialog[open]')) return; // typing in the feedback form isn't a punch
   if (cal && !$('#cal').hidden) { if (e.key === ' ' || e.key.startsWith('Arrow')) { e.preventDefault(); calTap(); } return; }
   const map = { ArrowLeft: 'block', a: 'block', ArrowRight: 'attack', d: 'attack', ArrowDown: 'dodge', s: 'dodge', ' ': 'dodge', ArrowUp: 'flow', w: 'flow' };
   if (map[e.key]) { e.preventDefault(); act(map[e.key]); }
@@ -1066,6 +1067,7 @@ $('#calPad').addEventListener('pointerdown', e => { e.preventDefault(); calTap()
 $('#fightBtn').onclick = startFight;
 $('#againBtn').onclick = startFight;
 $('#menuBtn').onclick = toMenu;
+$('#feedbackBtn').onclick = () => OHFeedback.open({ app: 'Rhythm Fighter', version: VERSION });
 $('#quitBtn').onclick = toMenu;
 $('#resumeBtn').onclick = resumeGame;
 $('#pauseBtn').onclick = pauseGame;
