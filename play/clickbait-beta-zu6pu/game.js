@@ -1043,25 +1043,19 @@
   }
 
   // ---------- Feedback and privacy ----------
-  // Feedback opens the player's own email app with a message to support@, in the same format as every
-  // Octopus Heart app ("<App> feedback (v<version>)"), so the daily support digest picks it up.
-  // Nothing is sent until they press Send. The game pauses while the panel is open.
+  // Feedback uses the shared Octopus Heart form (oh-feedback.js): a short form that sends straight to our
+  // inbox through the feedback service, plus the support address for people who'd rather email. Either way
+  // the subject is "Clickbait Campus feedback (v<version>): <Type>", so the daily support digest picks it up.
+  // The game pauses while the form is open.
   const FEEDBACK_EMAIL = 'support@octopusheartsoftware.com';
+  const FEEDBACK_KINDS = [['Bug', 'Something went wrong'], ['Idea', 'I have an idea'], ['Content', 'About the readings or news'], ['Other', 'Something else']];
   let beforePanel = null; // the overlay to go back to, and whether the game was running
 
-  function deviceInfo() {
-    const ua = navigator.userAgent;
-    const os = /CrOS/.test(ua) ? 'ChromeOS' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
-    const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
-    return `${os} · ${browser} · window ${innerWidth}×${innerHeight}`;
-  }
-
-  function feedbackDetails(kind) {
+  // One line about where the player was, so we can find the semester they mean (the service keeps 200 characters)
+  function feedbackWhere() {
     const where = !S ? 'Title screen' : S.over ? `Finished (${S.over})` : S.tutorial != null ? 'Tour' : `Week ${week()}, ${clockText()}`;
-    return ['', '', '', '---', 'Please keep the lines below; they help us fix problems.',
-      `App: Clickbait Campus ${cfg.version}`, `Type: ${kind}`, `Device: ${deviceInfo()}`, `Where: ${where}`,
-      S ? `Classes: ${S.classList.map((c) => c.code).join(', ')}` : null, S ? `News: ${S.storyList.map((s) => s.id).join(', ')}` : null,
-      CODE ? `Class code: ${CODE}` : null].filter((l) => l != null).join('\n');
+    return [where, S ? `Classes: ${S.classList.map((c) => c.code).join(', ')}` : null, S ? `News: ${S.storyList.map((s) => s.id).join(', ')}` : null,
+      CODE ? `Class code: ${CODE}` : null].filter((l) => l != null).join(' · ').slice(0, 200);
   }
 
   function showFeedback() {
@@ -1070,16 +1064,8 @@
       if (running) { S.paused = true; Sound.setPaused(true); $('stage').classList.add('blur'); }
       beforePanel = { html: $('overlay').classList.contains('show') ? $('overlay').innerHTML : null, running };
     }
-    showOverlay(`<div class="ov feedback"><h2>💬 Send feedback</h2>
-      <p>Thanks for testing Clickbait Campus! Pick what kind of feedback it is, and your email app will open with a message to us. Nothing is sent until you press Send.</p>
-      <p><button class="btn primary" data-act="feedback-send" data-arg="Bug">🐞 Something went wrong</button>
-      <button class="btn primary" data-act="feedback-send" data-arg="Idea">💡 I have an idea</button>
-      <button class="btn primary" data-act="feedback-send" data-arg="Content">📝 About the readings or news</button>
-      <button class="btn primary" data-act="feedback-send" data-arg="Other">💬 Something else</button></p>
-      <p class="small">Email app didn't open? Write to <b>${FEEDBACK_EMAIL}</b> and paste in the details:
-      <button class="linkbtn light" data-act="feedback-copy">Copy the details</button></p>
-      <p class="small">The details say which version, browser and semester you were playing, so we can find problems. No personal information is added. We'll only use your email address to reply.</p>
-      <p><button class="btn" data-act="panel-close">Back</button></p></div>`);
+    OHFeedback.open({ app: 'Clickbait Campus', version: cfg.version, kinds: FEEDBACK_KINDS, where: feedbackWhere(), onClose: closePanel,
+      intro: "Thanks for testing Clickbait Campus! Tell us what happened or what you'd like. We read every message." });
   }
 
   function showPrivacy() {
@@ -1088,7 +1074,7 @@
       <p><b>Clickbait Campus collects nothing about you.</b> There are no accounts, no ads, no tracking and no analytics.</p>
       <p>The only thing the game remembers is whether you turned music and sounds on or off, saved in your own browser. Everything else, including your grades and choices, disappears when you close the page.</p>
       <p>The game, its fonts and its music all load from octopusheartsoftware.com. Nothing loads from other companies.</p>
-      <p>If you send feedback, it's an ordinary email from your own email app. We use it only to reply and to improve the game.</p>
+      <p>If you send feedback with the form, your message (and your email, only if you add it) goes to our inbox through our feedback service, which keeps nothing. Along with it we send the game version, your type of device and browser, and where you were in the game. We use an email address only to reply, then delete it.</p>
       <p>Everyone, school, company and website in the game is made up.</p>
       <p class="small">Questions? Email ${FEEDBACK_EMAIL}. See also the <a class="light" href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Octopus Heart Software privacy policy</a>.</p>
       <p><button class="btn" data-act="panel-close">Back</button></p></div>`);
@@ -1228,16 +1214,6 @@
     feedback: () => showFeedback(),
     privacy: () => showPrivacy(),
     'panel-close': () => closePanel(),
-    'feedback-send': (a) => {
-      const subject = `Clickbait Campus feedback (v${cfg.version})`;
-      location.href = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(feedbackDetails(a))}`;
-    },
-    'feedback-copy': (a, el) => {
-      const text = `To: ${FEEDBACK_EMAIL}\nSubject: Clickbait Campus feedback (v${cfg.version})\n${feedbackDetails('Other')}`;
-      // If copying is blocked, show the text so it can be selected and copied by hand
-      const fail = () => { el.insertAdjacentHTML('afterend', `<br><textarea class="feedback-text" readonly aria-label="Feedback details">${esc(text)}</textarea>`); el.remove(); };
-      try { navigator.clipboard.writeText(text).then(() => { el.textContent = 'Copied!'; }, fail); } catch (e) { fail(); }
-    },
     resume: () => setPaused(false),
     'week-continue': () => setPaused(false),
     app: (a) => { S.lap.app = a; S.lap.dropdown = false; renderLapTabs(); renderLapView(); },

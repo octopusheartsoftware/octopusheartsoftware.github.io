@@ -21,6 +21,14 @@
   --link: #1f5fa8;
   --pixel: 'Pixelify Sans', ui-monospace, monospace;
   --read: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  /* The shared Send feedback form (oh-feedback.js) in the game's own colors */
+  --ohfb-bg: var(--paper);
+  --ohfb-ink: var(--ink);
+  --ohfb-muted: var(--ink-soft);
+  --ohfb-accent: var(--link);
+  --ohfb-on-accent: var(--paper);
+  --ohfb-line: var(--line);
+  --ohfb-font: var(--read);
 }
 
 * { box-sizing: border-box; }
