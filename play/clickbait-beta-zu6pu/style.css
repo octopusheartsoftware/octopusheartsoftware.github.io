@@ -282,7 +282,8 @@ h1 { font-size: 22px; } h2 { font-size: 18px; } h3 { font-size: 16px; }
 .linkbtn.light, a.light { color: var(--amber); }
 .code-chip { display: inline-block; background: #1c2340; border: 2px solid #000; padding: 6px 12px; font-size: 15px; }
 .code-box { font-family: var(--pixel); font-size: 40px; color: var(--amber); background: #0c1022; border: 3px solid #000; padding: 14px; margin: 16px auto; max-width: 520px; letter-spacing: 2px; }
-.code-box.long { font-size: 30px; letter-spacing: 1px; } /* codes with a semester length on the end */
+.code-box.long { font-size: 30px; letter-spacing: 1px; } /* codes with teacher settings on the end */
+.code-box.xlong { font-size: 24px; letter-spacing: 1px; }
 .code-link { font-family: ui-monospace, monospace; font-size: 14px; word-break: break-all; opacity: .85; }
 .code-input { font-family: var(--pixel); font-size: 26px; text-align: center; text-transform: uppercase; padding: 8px 12px; border: 3px solid #000; width: 420px; max-width: 100%; }
 .ov.teacher p { font-size: 17px; }

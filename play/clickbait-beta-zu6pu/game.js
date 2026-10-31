@@ -11,16 +11,20 @@
   const TICK = 0.25;
   const params = new URLSearchParams(location.search);
   const SPEED = +params.get('speed') || 1; // ?speed=4 fast-forwards for testing
-  const normCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+  const normCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
   const CODE = normCode(params.get('code'));
-  // Teachers can pick the semester length; it rides at the end of the class code ("SOGGY-PRETZEL-42-20MIN")
-  // so typed codes carry it too. Codes without one are the standard length. A longer semester slows
-  // every clock, deadline and reply window evenly.
+  // Teacher settings ride at the end of the class code, so typed codes carry them too:
+  // "SOGGY-PRETZEL-42-20MIN-WEEKLY" = a 20-minute semester that pauses after each week.
+  // A longer semester slows every clock, deadline and reply window evenly. The words before the
+  // settings pick the semester, so the same words give the same classes and stories at any setting.
   const LENGTHS = [15, 20, 25, 30];
   const STANDARD_MINUTES = Math.round(cfg.weeks * cfg.weekSeconds * cfg.pace / 60);
-  const codeMinutes = (code) => { const m = /-(\d+)MIN$/.exec(code); return m && LENGTHS.includes(+m[1]) ? +m[1] : null; };
+  const SETTINGS = /^(.*?)(?:-(\d+)MIN)?(-WEEKLY)?$/.exec(CODE);
+  const CODE_BASE = SETTINGS[1];
+  const MINUTES = LENGTHS.includes(+SETTINGS[2]) ? +SETTINGS[2] : null;
+  const WEEKLY = !!CODE && !!SETTINGS[3]; // pause after each week for a class talk
   const PACE = +params.get('pace') // ?pace=3 tries a different game pace
-    || (codeMinutes(CODE) ? codeMinutes(CODE) * 60 / (cfg.weeks * cfg.weekSeconds) : cfg.pace);
+    || (MINUTES ? MINUTES * 60 / (cfg.weeks * cfg.weekSeconds) : cfg.pace);
 
   let S = null; // game state
   let timer = null;
@@ -52,7 +56,7 @@
   function newGame() {
     const T = PACE;
     S = {
-      seed: CODE || Math.random().toString(36).slice(2), t: 0, T, slow: false, weekLen: cfg.weekSeconds * T, paused: false, over: null,
+      seed: CODE_BASE || Math.random().toString(36).slice(2), t: 0, T, slow: false, weekLen: cfg.weekSeconds * T, paused: false, over: null,
       vars: { player: cfg.playerName, user: cfg.playerName.toLowerCase() },
       money: cfg.startMoney, stress: cfg.startStress, world: 0, strikes: 0,
       weeksStarted: 0, walkWeek: 0, bank: [],
@@ -279,7 +283,7 @@
     addStress(3);
   }
   const allowance = () => Math.max(cfg.minAllowance, cfg.weeklyAllowance - cfg.allowanceCut * S.strikes);
-  function log(entry) { S.log.push(entry); }
+  function log(entry) { S.log.push({ week: week(), ...entry }); } // week can be set by the caller
 
   // ---------- Main loop ----------
   function setup() {
@@ -358,6 +362,10 @@
     S.t += TICK * SPEED / (S.slow ? cfg.slowFactor : 1); // slow time stretches everything, deadlines included
     const t = S.t, T = S.T;
 
+    // With a weekly-pause class code, a finished week (not the last) stops for a class talk below
+    const endedWeek = WEEKLY && S.weeksStarted && S.weeksStarted < week() ? S.weeksStarted : 0;
+    const weekBegan = S.weekStart, weekEnd = { money: S.money, stress: S.stress };
+
     // Weekly allowance and grind
     while (S.weeksStarted < week()) {
       S.weeksStarted++;
@@ -368,6 +376,7 @@
       S.money += amt;
       S.bank.unshift({ what: 'Mom & Dad (allowance)', amount: amt, when: `Wk ${S.weeksStarted} Mon` });
       pushText({ id: 'bank-' + S.weeksStarted, kind: 'info', from: 'GooseBank', body: `Deposit: $${amt} from Mom & Dad. Have a great week ${S.weeksStarted}!` });
+      S.weekStart = { money: S.money, stress: S.stress };
     }
 
     // Scheduled content
@@ -394,7 +403,7 @@
         q.missed = true; q.score = 0;
         Sound.play('missed');
         addStress(15);
-        log({ type: 'quiz', verdict: 'bad', title: `Missed the ${c.code} quiz (Module ${md.n}: ${md.def.title})`, detail: `Missed quizzes count as a zero and can't be made up.`, lesson: 'Start reading early. A new module opens as soon as the last one closes.' });
+        log({ week: Math.ceil(q.dueAt / S.weekLen), type: 'quiz', verdict: 'bad', title: `Missed the ${c.code} quiz (Module ${md.n}: ${md.def.title})`, detail: `Missed quizzes count as a zero and can't be made up.`, lesson: 'Start reading early. A new module opens as soon as the last one closes.' });
         toastLap(`⏰ You missed the ${c.code} quiz.`);
         const misses = Object.values(S.courses[c.id].quiz).filter((x) => x.missed).length;
         if (misses >= cfg.missesToFail) return end('fail', c);
@@ -405,6 +414,7 @@
     // Surviving to the last day counts as finishing, even if the final quiz pushed stress over the edge
     if (t >= cfg.weeks * S.weekLen) return end('complete');
     if (S.stress >= 100) return end('dropout');
+    if (endedWeek) return showWeekBreak(endedWeek, weekBegan, weekEnd);
 
     // TV rotation
     if (t - S.tv.last >= 7) { S.tv.idx++; S.tv.last = t; renderTv(); }
@@ -978,7 +988,7 @@
 
   function showTitle() {
     Sound.music('title');
-    const code = CODE ? `<p class="code-chip">Class code <b>${CODE}</b>: everyone using this code gets the same semester. Sound starts off.
+    const code = CODE ? `<p class="code-chip">Class code <b>${CODE}</b>: everyone using this code gets the same semester. Sound starts off.${WEEKLY ? ' The game pauses after each week for a class talk.' : ''}
       <button class="linkbtn light" data-act="leave-code">Play a random semester instead</button></p>` : '';
     showOverlay(`<div class="ov title" style="padding-top:50px"><h1 class="wave" aria-label="Clickbait Campus">${waveTitle('Clickbait Campus')}</h1>
       <p><span class="beta-badge">Beta</span> One semester. Three screens. Way too many emails.</p>${code}
@@ -1003,25 +1013,29 @@
   const makeCode = () => [CODE_WORDS[0], CODE_WORDS[1]].map((w) => w[Math.floor(Math.random() * w.length)]).join('-') + '-' + (10 + Math.floor(Math.random() * 90));
   const codeLink = (code) => `${location.origin}${location.pathname}?code=${code}`;
 
-  function showTeacher(base = makeCode(), minutes = STANDARD_MINUTES) {
-    const code = minutes === STANDARD_MINUTES ? base : `${base}-${minutes}MIN`;
+  function showTeacher(base = makeCode(), minutes = STANDARD_MINUTES, weekly = false) {
+    const code = base + (minutes === STANDARD_MINUTES ? '' : `-${minutes}MIN`) + (weekly ? '-WEEKLY' : '');
+    const pick = (label, on, arg) => `<button class="btn${on ? ' primary' : ''}" data-act="teacher-set" data-arg="${arg}" aria-pressed="${on}">${label}</button>`;
     showOverlay(`<div class="ov teacher"><h2>For teachers</h2>
       <p>Give your class a code, and every student who uses it gets <b>the same semester</b>: the same classes, emails, scams and news stories. That makes it easy to discuss the debrief together.</p>
       <p>Music and sound start <b>off</b> for everyone using a class code, so the room stays quiet. Students can turn sound on if they have headphones.</p>
-      <p class="len-pick"><b>Semester length:</b> ${LENGTHS.map((n) => `<button class="btn${n === minutes ? ' primary' : ''}" data-act="teacher-length" data-arg="${base}:${n}" aria-pressed="${n === minutes}">${n} min</button>`).join(' ')}</p>
-      <p class="small">Longer semesters give students more time to read. The same things happen, just more slowly. The length is part of the code.</p>
-      <div class="code-box${code.length > 20 ? ' long' : ''}">${code}</div>
+      <p class="len-pick"><b>Semester length:</b> ${LENGTHS.map((n) => pick(`${n} min`, n === minutes, `${base}:${n}:${+weekly}`)).join(' ')}</p>
+      <p class="small">Longer semesters give students more time to read. The same things happen, just more slowly.</p>
+      <p class="len-pick"><b>Pause after each week:</b> ${pick('No', !weekly, `${base}:${minutes}:0`)} ${pick('Yes', weekly, `${base}:${minutes}:1`)}</p>
+      <p class="small">With pauses, every student's game stops at the end of each week (except the last) and shows a short summary of their own week, for a class talk. They press Continue when you say so.</p>
+      <p class="small">Both choices are part of the code, so students get them whether they use the link or type the code.</p>
+      <div class="code-box${code.length > 26 ? ' xlong' : code.length > 20 ? ' long' : ''}">${code}</div>
       <p>Share this link, or have students choose "Have a class code?" and type the code:</p>
       <p class="code-link">${esc(codeLink(code))}</p>
       <p><button class="btn primary" data-act="copy-link" data-arg="${code}">Copy link</button>
-      <button class="btn" data-act="teacher" data-arg="${minutes}">Make a different code</button>
+      <button class="btn" data-act="teacher" data-arg="${minutes}:${+weekly}">Make a different code</button>
       <button class="btn" data-act="use-code" data-arg="${code}">Try this code myself</button></p>
       <p><button class="linkbtn light" data-act="restart">Back</button></p></div>`);
   }
 
   function showJoin() {
     showOverlay(`<div class="ov"><h2>Join your class</h2><p>Type the code your teacher gave you.</p>
-      <p><input id="join-code" class="code-input" maxlength="30" placeholder="SOGGY-PRETZEL-42" aria-label="Class code" autocomplete="off"></p>
+      <p><input id="join-code" class="code-input" maxlength="40" placeholder="SOGGY-PRETZEL-42" aria-label="Class code" autocomplete="off"></p>
       <p><button class="btn primary" data-act="join-go">Join</button> <button class="btn" data-act="restart">Back</button></p></div>`);
     const input = $('join-code');
     input.focus();
@@ -1110,7 +1124,7 @@
       dropout: ['You dropped out', 'Your stress hit 100. Time to go home and rest.'],
       fail: ['You failed a class', `You missed ${cfg.missesToFail} quizzes in ${course ? course.code : 'a class'}, so it's an automatic F.`]
     }[reason];
-    const grades = S.classList.map((c) => { const g = courseGrade(c.id); return `${c.code}: <b>${g == null ? '—' : letter(g) + ' (' + g + '%)'}</b>`; }).join('<br>');
+    const grades = gradesHtml();
     S.debriefCat = 'all';
     showOverlay(`<div class="ov"><h2>${titles[0]}</h2><p>${titles[1]}</p>${CODE ? `<p class="small">Class code: <b>${CODE}</b></p>` : ''}
       <div class="results-grid"><div class="stat">GPA<b>${reason === 'complete' ? gpa() : '—'}</b></div><div class="stat">Money<b>$${S.money}</b></div>
@@ -1119,6 +1133,30 @@
       <h2>Semester debrief</h2><div id="debrief">${debriefHtml()}</div>
       <p><button class="btn primary" data-act="restart">Play again</button>${CODE ? ' <button class="btn" data-act="leave-code">Play a random semester</button>' : ''} <button class="btn" data-act="feedback">💬 Send feedback</button></p>
       <p class="credit">An Octopus Heart Software game · Music made with Suno</p></div>`);
+  }
+
+  const gradesHtml = () => S.classList.map((c) => { const g = courseGrade(c.id); return `${c.code}: <b>${g == null ? '—' : letter(g) + ' (' + g + '%)'}</b>`; }).join('<br>');
+
+  // ---------- Weekly class talk ----------
+  // With a "-WEEKLY" class code, each student's game stops after every week but the last and shows a
+  // short summary of their own week, so the class can talk it through. Nothing moves until Continue.
+  function showWeekBreak(w, began, ended) {
+    S.paused = true;
+    Sound.setPaused(true);
+    renderAll();
+    $('stage').classList.add('blur');
+    const items = S.log.filter((l) => l.week === w);
+    const good = items.filter((l) => l.verdict === 'good').length, bad = items.filter((l) => l.verdict === 'bad').length;
+    const change = (n, fmt) => (n ? `<div class="small">${n > 0 ? '+' : '−'}${fmt(Math.abs(n))} this week</div>` : '');
+    const dMoney = began ? ended.money - began.money : 0, dStress = began ? Math.round(ended.stress - began.stress) : 0;
+    const list = items.map((l) => `<div class="deb ${l.verdict}">${l.verdict === 'good' ? '✔' : l.verdict === 'bad' ? '✖' : '•'} <b>${esc(l.title)}</b>
+      ${l.verdict === 'bad' && l.detail ? `<div>${esc(l.detail)}</div>` : ''}</div>`).join('');
+    showOverlay(`<div class="ov week-break"><h2>End of Week ${w}</h2>
+      <p>Your game is paused so your class can talk about this week. Press Continue when your teacher says so.</p>
+      <div class="results-grid"><div class="stat">This week<b>✔ ${good} · ✖ ${bad}</b></div><div class="stat">Money<b>$${ended.money}</b>${change(dMoney, (v) => '$' + v)}</div>
+      <div class="stat">Stress<b>${Math.round(ended.stress)}</b>${change(dStress, (v) => v)}</div><div class="stat">Grades so far<div class="small" style="margin-top:6px">${gradesHtml()}</div></div></div>
+      <h2>What happened</h2><div class="debrief">${list || '<p>A quiet week: nothing to look back on yet.</p>'}</div>
+      <p><button class="btn primary" data-act="week-continue">Continue to Week ${w + 1}</button></p></div>`);
   }
 
   // The debrief can be filtered by skill area, so a class can review one kind of choice at a time
@@ -1173,8 +1211,8 @@
     'tut-back': () => { Sound.play('tick'); S.tutorial--; showTutStep(); },
     'tut-skip': () => start(),
     sound: (a) => { Sound.toggle(a); renderSoundBtns(); },
-    teacher: (a) => showTeacher(undefined, +a || STANDARD_MINUTES),
-    'teacher-length': (a) => { const [base, n] = a.split(':'); showTeacher(base, +n); },
+    teacher: (a) => { const [n, w] = String(a || '').split(':'); showTeacher(undefined, +n || STANDARD_MINUTES, w === '1'); },
+    'teacher-set': (a) => { const [base, n, w] = a.split(':'); showTeacher(base, +n, w === '1'); },
     join: () => showJoin(),
     'join-go': () => { const c = normCode($('join-code').value); if (c) goToCode(c); },
     'use-code': (a) => goToCode(a),
@@ -1201,6 +1239,7 @@
       try { navigator.clipboard.writeText(text).then(() => { el.textContent = 'Copied!'; }, fail); } catch (e) { fail(); }
     },
     resume: () => setPaused(false),
+    'week-continue': () => setPaused(false),
     app: (a) => { S.lap.app = a; S.lap.dropdown = false; renderLapTabs(); renderLapView(); },
     noodle: (a) => { S.lap.noodle.view = a; renderLapView(); },
     answer: (a) => {
