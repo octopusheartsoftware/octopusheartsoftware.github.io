@@ -4,17 +4,17 @@ import {
   CARD_W, CARD_H, ITEM_SIZE, MAX_CARDS, MAX_ITEMS, MAX_PROPS, MAX_LOOKS, uid, newCard, newItem, newProp, newLook, newButton,
   newAdventure, normalize, cardById, itemById, propById, lookById, buttonById, nextCardName, nextItemName, nextPropName,
   nextLookName, copyCard, buttonDoesSomething, buttonName, changeText, cardPreview, bounds, shapeSvg, esc, cleanAdventure,
-} from './model.js?v=mvu71pwg';
-import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvu71pwg';
-import { Painter } from './paint.js?v=mvu71pwg';
-import { renderMap, findProblems } from './map.js?v=mvu71pwg';
-import { createPlayer } from './play.js?v=mvu71pwg';
-import { SOUNDS, playSound } from './sounds.js?v=mvu71pwg';
-import { STAMPS, stampSvg } from './stamps.js?v=mvu71pwg';
-import { buildDemo } from './demo.js?v=mvu71pwg';
-import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvu71pwg';
-import { createTour } from './tour.js?v=mvu71pwg';
-import { icon } from './icons.js?v=mvu71pwg';
+} from './model.js?v=mvwumd51';
+import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvwumd51';
+import { Painter } from './paint.js?v=mvwumd51';
+import { renderMap, findProblems } from './map.js?v=mvwumd51';
+import { createPlayer } from './play.js?v=mvwumd51';
+import { SOUNDS, playSound } from './sounds.js?v=mvwumd51';
+import { STAMPS, stampSvg } from './stamps.js?v=mvwumd51';
+import { buildDemo } from './demo.js?v=mvwumd51';
+import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvwumd51';
+import { createTour } from './tour.js?v=mvwumd51';
+import { icon } from './icons.js?v=mvwumd51';
 
 const VERSION = '0.6.0';
 const FEEDBACK_EMAIL = 'support@octopusheartsoftware.com';
@@ -529,7 +529,7 @@ $('paintTools').addEventListener('click', (e) => {
   if (st) setStamp(st.dataset.stamp);
 });
 $('sizeSlider').oninput = (e) => setSize(+e.target.value);
-$('opacitySlider').oninput = (e) => { painter.opacity = e.target.value / 100; $('opacityOut').textContent = `${100 - e.target.value}%`; };
+$('opacitySlider').oninput = (e) => { painter.opacity = e.target.value / 100; $('opacityOut').textContent = `${e.target.value}%`; };
 $('filled').onchange = (e) => { painter.filled = e.target.checked; };
 $('anyColor').oninput = (e) => setColor(e.target.value);
 $('undo').onclick = () => painter.undo();
@@ -1097,7 +1097,7 @@ setSize(12);
 setStamp('tree');
 setTool('brush');
 $('opacitySlider').value = 100;
-$('opacityOut').textContent = '0%';
+$('opacityOut').textContent = '100%';
 setBtnShape('rect');
 document.fonts.load('500 20px Lexend').catch(() => {});
 route();

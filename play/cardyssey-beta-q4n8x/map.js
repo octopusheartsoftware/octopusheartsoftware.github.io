@@ -1,8 +1,8 @@
 // The map: every card as a thumbnail, laid out in columns by how many clicks it is from the
 // start card, with arrows for each button. Also finds things worth checking (lost cards,
 // buttons that go nowhere, dead ends).
-import { cardById, itemById, buttonDoesSomething, cardPreview, esc } from './model.js?v=mvu71pwg';
-import { icon } from './icons.js?v=mvu71pwg';
+import { cardById, itemById, buttonDoesSomething, cardPreview, esc } from './model.js?v=mvwumd51';
+import { icon } from './icons.js?v=mvwumd51';
 
 const COL_W = 250, ROW_H = 170, NODE_W = 176, THUMB_H = 110, PAD = 32;
 

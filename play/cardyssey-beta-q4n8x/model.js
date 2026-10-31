@@ -16,7 +16,7 @@
 // prop      = { id, name, looks: [{ id, name, image }], startsHidden }: drawn once, placed on cards, can change look
 // placed    = { id, itemId | propId, x, y, size }: an item or prop sitting on a card
 // Positions are in card pixels (CARD_W × CARD_H), whatever size the card is shown at.
-import { soundName } from './sounds.js?v=mvu71pwg';
+import { soundName } from './sounds.js?v=mvwumd51';
 
 export const CARD_W = 960, CARD_H = 600;
 export const ITEM_SIZE = 300;
