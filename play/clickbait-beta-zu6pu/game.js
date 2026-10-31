@@ -544,6 +544,12 @@
     const r = how.reply != null ? textReplies(x)[how.reply] : null;
     if (r) { x.sent = r.text; Sound.play('sent'); }
     if (how.expired) x.status = 'missed';
+    // "Block & delete" and "Report junk & delete" really take the message off the phone
+    if (r && /delete/i.test(r.text)) {
+      x.deleted = true;
+      if (S.phone.view === 'thread:' + x.from && !S.texts.some((y) => y.from === x.from && !y.deleted)) S.phone.view = 'home';
+      toastPhone(d.kind === 'ad' ? '🗑️ Blocked and deleted.' : '🗑️ Reported as junk and deleted.');
+    }
 
     if (d.kind === 'friend') {
       if (r && r.go) { spend(d.cost, `${d.from}: ${d.body.slice(0, 22)}…`); addStress(-d.relief); }
@@ -898,21 +904,22 @@
   // ---------- Phone ----------
   function renderPhone() {
     const pv = S.phone.view;
-    const unreadTexts = S.texts.filter((x) => x.status === 'new').length;
+    const texts = S.texts.filter((x) => !x.deleted);
+    const unreadTexts = texts.filter((x) => x.status === 'new').length;
     $('phone-nav').innerHTML = [['home', `💬${unreadTexts ? `<span class="badge">${unreadTexts}</span>` : ''}`], ['bank', '🏦 Bank'], ['stroll', '🚶 Stroll']]
       .map(([id, label]) => `<button class="${pv === id || (id === 'home' && pv.startsWith('thread')) ? 'on' : ''}" data-act="phone" data-arg="${id}">${label}</button>`).join('');
     let html = '';
     if (pv === 'home') {
       const threads = [];
-      for (const x of S.texts.slice().reverse()) if (!threads.some((t) => t.from === x.from)) threads.push(x);
+      for (const x of texts.slice().reverse()) if (!threads.some((t) => t.from === x.from)) threads.push(x);
       html = `<div class="ph-title">Messages</div>` + (threads.length ? threads.map((x) => {
-        const unread = S.texts.some((y) => y.from === x.from && y.status === 'new');
-        const waiting = S.texts.some((y) => y.from === x.from && !y.done);
+        const unread = texts.some((y) => y.from === x.from && y.status === 'new');
+        const waiting = texts.some((y) => y.from === x.from && !y.done);
         return `<button class="thread-item" data-act="phone" data-arg="thread:${esc(x.from)}"><b><span>${esc(x.from)}</span>${unread ? '<span class="dot"></span>' : waiting ? '<span class="small">↩</span>' : ''}</b><span class="prev">${esc(x.def.body)}</span></button>`;
       }).join('') : '<div class="empty">No messages yet.</div>');
     } else if (pv.startsWith('thread:')) {
       const from = pv.slice(7);
-      const items = S.texts.filter((x) => x.from === from);
+      const items = texts.filter((x) => x.from === from);
       items.forEach((x) => { if (x.status === 'new') x.status = 'read'; });
       const bubbles = items.map((x) => {
         let b = `<div class="bub in ${x.def.kind === 'ad' ? 'ad' : ''}">${esc(x.def.body)}${x.def.kind === 'friend' ? `<div class="bub-meta">Cost: ${x.def.cost ? '$' + x.def.cost : 'free'}</div>` : ''}</div>`;
