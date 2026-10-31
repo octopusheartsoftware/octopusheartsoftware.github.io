@@ -321,7 +321,7 @@ function aboutCredit(s) {
 // Listen buttons show Stop while their entry is playing (updated in place, so open "About it" boxes stay open).
 function syncGuideButtons() {
   document.querySelectorAll('#guide [data-sp], #guide [data-say]').forEach((b) => {
-    const id = b.dataset.sp ? 'sp-' + b.dataset.sp : guideItems[b.dataset.say]?.audio || b.dataset.say;
+    const id = b.dataset.sp ? b.dataset.sp : guideItems[b.dataset.say]?.audio || b.dataset.say;
     b.textContent = speaking?.id === id ? '■ Stop' : '▶ Listen';
   });
 }
@@ -342,12 +342,19 @@ function renderGuide(fromWalk = false) {
       <select id="month">${MONTHS.map((m, i) => `<option value="${i + 1}"${i + 1 === state.month ? ' selected' : ''}>${m}</option>`).join('')}</select></div>
       <p class="guide-note">Plants and animals people have recorded between mile ${z.from.toFixed(1)} and ${z.to.toFixed(1)} in past ${MONTHS[state.month - 1]}s. Exact spots are never shown, and rare or poached species are left out.</p>
       <div class="filters" role="group" aria-label="Show">${GROUPS.map(([g, l]) => `<button class="chip" data-group="${g}" aria-pressed="${state.group === g}">${l}</button>`).join('')}</div>`;
-    html += items.length ? `<div class="species">${items.map((s) => `<div class="sp">
+    // Hand-picked well-known ones first (the sighting records barely include them), then what people have recorded here.
+    const common = (S.nature.common || []).filter((c) => c.months.includes(state.month) && inGroup(c.group));
+    const card = (s, id, line) => `<div class="sp">
         ${s.photo ? `<img class="ph" loading="lazy" src="${esc(s.photo.url)}" alt="">` : '<span class="ph"></span>'}
-        <span class="nm">${esc(cap(s.common) || s.sci)}</span><span class="sci">${esc(s.sci)}</span>
-        <span class="ct">${s.n} record${s.n === 1 ? '' : 's'}${s.photo ? ` · Photo: ${esc(s.photo.by)}, ${s.photo.license}` : ''}</span>
-        <button data-sp="${s.key}">${speaking?.id === 'sp-' + s.key ? '■ Stop' : '▶ Listen'}</button>
-        <details class="about"><summary>About it</summary><p>${esc(s.about)}</p>${aboutCredit(s)}</details></div>`).join('')}</div>`
+        <span class="nm">${esc(s.name)}</span><span class="sci">${esc(s.sci)}</span>
+        <span class="ct">${esc(line)}${s.photo ? ` · Photo: ${esc(s.photo.by)}, ${s.photo.license}` : ''}</span>
+        <button data-sp="${esc(id)}">${speaking?.id === id ? '■ Stop' : '▶ Listen'}</button>
+        <details class="about"><summary>About it</summary><p>${esc(s.about)}</p>${aboutCredit(s)}</details></div>`;
+    if (common.length) html += `<h3 class="section-title" style="margin-top:0">Common along this ridge</h3>
+      <p class="guide-note">Well-known plants and animals of the high crest, picked from the park's official species list.</p>
+      <div class="species">${common.map((c) => card({ ...c, aboutFrom: 'written' }, c.id, c.when)).join('')}</div>
+      <h3 class="section-title">Recorded on this stretch</h3>`;
+    html += items.length ? `<div class="species">${items.map((s) => card(s, 'sp-' + s.key, `${s.n} record${s.n === 1 ? '' : 's'}`)).join('')}</div>`
       : `<p class="panel empty">Nobody has shared openly licensed records of these here in ${MONTHS[state.month - 1]} yet. Try another month or group.</p>`;
   } else if (state.guide === 'rocks') {
     const r = rockAt(state.mile);
@@ -420,8 +427,8 @@ document.addEventListener('click', (e) => {
     return guideSay(LISTEN[id] || { id, title: x.name, text: x.text || '' });
   }
   if ((b = t('[data-sp]'))) {
-    const s = S.nature.species[b.dataset.sp];
-    return guideSay({ id: 'sp-' + b.dataset.sp, title: s.name, text: s.about });
+    const id = b.dataset.sp, s = id.startsWith('cm-') ? S.nature.common.find((c) => c.id === id) : S.nature.species[id.slice(3)];
+    return guideSay({ id, title: s.name, text: s.about });
   }
   if ((b = t('[data-topic]'))) {
     const tp = b.dataset.topic;
