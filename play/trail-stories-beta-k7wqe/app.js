@@ -420,7 +420,7 @@ function narratorChanged() {
   const n = narrator(), have = AUDIO.files[n]?.length || 0;
   $('#voiceField').hidden = n !== 'device' && have >= S.stories.length;
   $('#narratorNote').textContent = n === 'device' ? 'Uses the voices built into your phone or computer.'
-    : `A natural-sounding voice made by computer with Kokoro, a free open-source voice. In this test ${have} of ${S.stories.length} stops are recorded; the rest use the device voice below.`;
+    : `A natural-sounding voice made by computer with Kokoro, a free open-source voice. ${have >= S.stories.length ? 'Every stop is recorded.' : `In this test ${have} of ${S.stories.length} stops are recorded; the rest use the device voice below.`}`;
   S.stories.forEach((s) => { const b = $(`#stops .row[data-id="${CSS.escape(s.id)}"] .row-body`); if (b && !b.hidden) b.innerHTML = rowBody(s); });
 }
 narratorChanged();
