@@ -125,6 +125,13 @@ button.primary { background: var(--forest); border-color: var(--forest); color: 
 .sp .sci { padding: 0 10px; font-size: 14px; font-style: italic; color: var(--ink-2); }
 .sp .ct { padding: 2px 10px 0; font-size: 14px; color: var(--ink-2); }
 .sp button { margin: 8px 10px 10px; min-height: 40px; padding: 4px 10px; font-size: 15px; align-self: flex-start; }
+.sp .about { padding: 0 10px 10px; font-size: 15px; }
+.sp .about summary { cursor: pointer; font-weight: 700; min-height: 36px; display: flex; align-items: center; list-style: none; }
+.sp .about summary::-webkit-details-marker { display: none; }
+.sp .about summary::before { content: "▸"; width: 1.1em; }
+.sp .about[open] summary::before { content: "▾"; }
+.sp .about p + p { margin-top: 6px; }
+.sp .credit { font-size: 13px; color: var(--ink-2); }
 .empty { padding: 24px 16px; text-align: center; color: var(--ink-2); }
 .section-title { font-size: 21px; margin: 18px 0 10px; }
 

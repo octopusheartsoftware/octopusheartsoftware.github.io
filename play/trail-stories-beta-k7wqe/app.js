@@ -152,6 +152,7 @@ function next() {
   if (item) $('#nowTitle').textContent = item.title;
   pausedForStory = !!item && state.walking; // the walk waits while a stop is read
   updateWalk();
+  syncGuideButtons();
   drawMap();
   if (!item) return;
   if (recorded(item.id)) return play(item);
@@ -310,6 +311,21 @@ function rockText(r) {
     + (r.squeezed ? ' It started out as mud and sand, then was squeezed and heated deep underground when the Appalachians were pushed up.' : '')
     + (r.pyrite ? ' In places it holds pyrite, fool\'s gold.' : '');
 }
+// Where a species' "About it" comes from, said plainly.
+function aboutCredit(s) {
+  const wiki = s.wiki ? `<a href="${esc(s.wiki)}" target="_blank" rel="noopener">Wikipedia</a>` : '';
+  const more = s.sources.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a>`);
+  return s.aboutFrom === 'written' ? `<p class="credit">Draft · not fact-checked yet. Sources: ${[wiki, ...more].filter(Boolean).join('; ')}</p>`
+    : s.aboutFrom === 'wikipedia' ? `<p class="credit">From ${wiki} (CC BY-SA). Not yet checked against original sources.</p>` : '';
+}
+// Listen buttons show Stop while their entry is playing (updated in place, so open "About it" boxes stay open).
+function syncGuideButtons() {
+  document.querySelectorAll('#guide [data-sp], #guide [data-say]').forEach((b) => {
+    const id = b.dataset.sp ? 'sp-' + b.dataset.sp : guideItems[b.dataset.say]?.audio || b.dataset.say;
+    b.textContent = speaking?.id === id ? '■ Stop' : '▶ Listen';
+  });
+}
+const LISTEN = Object.fromEntries((S.listen || []).map((x) => [x.id, x]));
 let guideKey = '';
 function renderGuide(fromWalk = false) {
   // While walking, only redraw when something you'd see changes.
@@ -330,13 +346,14 @@ function renderGuide(fromWalk = false) {
         ${s.photo ? `<img class="ph" loading="lazy" src="${esc(s.photo.url)}" alt="">` : '<span class="ph"></span>'}
         <span class="nm">${esc(cap(s.common) || s.sci)}</span><span class="sci">${esc(s.sci)}</span>
         <span class="ct">${s.n} record${s.n === 1 ? '' : 's'}${s.photo ? ` · Photo: ${esc(s.photo.by)}, ${s.photo.license}` : ''}</span>
-        <button data-sp="${s.key}">▶ Listen</button></div>`).join('')}</div>`
+        <button data-sp="${s.key}">${speaking?.id === 'sp-' + s.key ? '■ Stop' : '▶ Listen'}</button>
+        <details class="about"><summary>About it</summary><p>${esc(s.about)}</p>${aboutCredit(s)}</details></div>`).join('')}</div>`
       : `<p class="panel empty">Nobody has shared openly licensed records of these here in ${MONTHS[state.month - 1]} yet. Try another month or group.</p>`;
   } else if (state.guide === 'rocks') {
     const r = rockAt(state.mile);
     state.open.add('rock-here');
     html += `<h3 class="section-title" style="margin-top:0">Right here</h3><ol class="rows">`
-      + guideRow({ id: 'rock-here', kind: `Mile ${r.from.toFixed(1)}–${r.to.toFixed(1)}`, name: r.name, text: rockText(r),
+      + guideRow({ id: 'rock-here', audio: 'rock-' + S.rocks.indexOf(r), kind: `Mile ${r.from.toFixed(1)}–${r.to.toFixed(1)}`, name: r.name, text: rockText(r),
         body: `<p>${esc(rockText(r))}</p><div class="actions"><button data-say="rock-here">▶ Listen</button></div><p class="credit">Macrostrat geologic map data (CC BY 4.0)</p>` }, '') + '</ol>';
     html += `<h3 class="section-title">Along the whole walk</h3><ol class="rows">` + S.rocks.map((x, i) => guideRow({ id: 'rock-' + i,
       kind: `Mile ${x.from.toFixed(1)}–${x.to.toFixed(1)}`, name: x.name, text: rockText(x),
@@ -392,14 +409,19 @@ document.addEventListener('click', (e) => {
     if (speaking?.id === s.id) return stopSpeaking();
     stopSpeaking(); return say(s);
   }
+  // Field guide: the same recorded voice as the walk (ids match S.listen), or the device voice if there's no recording.
+  const guideSay = (item) => {
+    const playing = speaking?.id === item.id;
+    stopSpeaking();
+    if (!playing) say(item);
+  };
   if ((b = t('[data-say]'))) {
-    const x = guideItems[b.dataset.say];
-    stopSpeaking(); return say({ id: x.id, title: x.name, text: x.text || '' });
+    const x = guideItems[b.dataset.say], id = x.audio || x.id;
+    return guideSay(LISTEN[id] || { id, title: x.name, text: x.text || '' });
   }
   if ((b = t('[data-sp]'))) {
-    const key = b.dataset.sp, s = S.nature.species[key], n = (zoneAt(state.mile).months[state.month] || []).find(([k]) => k == key)?.[1];
-    stopSpeaking();
-    return say({ id: 'sp' + key, title: cap(s.common) || s.sci, text: `${s.common ? `Its scientific name is ${s.sci}. ` : ''}People have recorded it along this stretch ${n} time${n === 1 ? '' : 's'} in past ${MONTHS[state.month - 1]}s.` });
+    const s = S.nature.species[b.dataset.sp];
+    return guideSay({ id: 'sp-' + b.dataset.sp, title: s.name, text: s.about });
   }
   if ((b = t('[data-topic]'))) {
     const tp = b.dataset.topic;
