@@ -4,19 +4,19 @@ import {
   CARD_W, CARD_H, ITEM_SIZE, MAX_CARDS, MAX_ITEMS, MAX_PROPS, MAX_LOOKS, uid, newCard, newItem, newProp, newLook, newButton,
   newAdventure, normalize, cardById, itemById, propById, lookById, buttonById, nextCardName, nextItemName, nextPropName,
   nextLookName, copyCard, buttonDoesSomething, buttonName, changeText, cardPreview, bounds, shapeSvg, esc, cleanAdventure,
-} from './model.js?v=mvx1vjg6';
-import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvx1vjg6';
-import { Painter } from './paint.js?v=mvx1vjg6';
-import { renderMap, findProblems } from './map.js?v=mvx1vjg6';
-import { createPlayer } from './play.js?v=mvx1vjg6';
-import { SOUNDS, playSound } from './sounds.js?v=mvx1vjg6';
-import { STAMPS, stampSvg } from './stamps.js?v=mvx1vjg6';
-import { buildDemo } from './demo.js?v=mvx1vjg6';
-import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvx1vjg6';
-import { createTour } from './tour.js?v=mvx1vjg6';
-import { icon } from './icons.js?v=mvx1vjg6';
+} from './model.js?v=mvx22bff';
+import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvx22bff';
+import { Painter } from './paint.js?v=mvx22bff';
+import { renderMap, findProblems } from './map.js?v=mvx22bff';
+import { createPlayer } from './play.js?v=mvx22bff';
+import { SOUNDS, playSound } from './sounds.js?v=mvx22bff';
+import { STAMPS, stampSvg } from './stamps.js?v=mvx22bff';
+import { buildDemo } from './demo.js?v=mvx22bff';
+import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvx22bff';
+import { createTour } from './tour.js?v=mvx22bff';
+import { icon } from './icons.js?v=mvx22bff';
 
-const VERSION = '0.6.2';
+const VERSION = '0.7.0';
 const FEEDBACK_EMAIL = 'support@octopusheartsoftware.com';
 const FEEDBACK_URL = 'https://feedback.octopusheartsoftware.com/';
 const $ = (id) => document.getElementById(id);
@@ -1068,6 +1068,25 @@ async function startTour() {
 }
 $('startTour').innerHTML = withIcon('play', 'Take the tour');
 $('startTour').onclick = startTour;
+
+// ---------- Works offline ----------
+// sw.js keeps a copy of Cardyssey's files in this browser so it opens without internet. Browsers
+// that can install web apps (Chrome, Edge, Android) get an Install button on the home screen;
+// iPhones and iPads get a one-line how-to instead, since Safari has no button. Nothing pops up.
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+let installPrompt = null;
+$('installApp').innerHTML = withIcon('download', 'Install Cardyssey');
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; $('installRow').hidden = false; });
+$('installApp').onclick = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  $('installRow').hidden = true;
+};
+window.addEventListener('appinstalled', () => { $('installRow').hidden = true; });
+$('installIos').hidden = installed || !/iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 $('tourBtn').innerHTML = withIcon('help', 'Tour');
 $('tourBtn').onclick = async () => {
   if (await ask('Take the tour?', 'The tour starts a new practice adventure and builds it with you, step by step. This adventure stays saved just as it is.', 'Start the tour')) startTour();

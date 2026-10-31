@@ -8,9 +8,11 @@
   <title>Cardyssey</title>
   <meta name="description" content="Draw your own adventure, one card at a time. A free creativity tool from Octopus Heart Software.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="brand.css?v=mvx1vjg6">
-  <link rel="stylesheet" href="style.css?v=mvx1vjg6">
-  <script type="module" src="main.js?v=mvx1vjg6"></script>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="app-icon-192.png">
+  <link rel="stylesheet" href="brand.css?v=mvx22bff">
+  <link rel="stylesheet" href="style.css?v=mvx22bff">
+  <script type="module" src="main.js?v=mvx22bff"></script>
 </head>
 <body>
   <header class="topbar">
@@ -47,6 +49,8 @@
             <input id="fileInput" type="file" accept=".cardyssey,.json,application/json" hidden>
           </p>
           <p class="hero-new">New here? <button id="startTour" class="btn quiet"></button> <span class="small muted">or</span> <button id="openDemo" class="linkbtn small">look at some example adventures</button></p>
+          <p id="installRow" class="install-row small" hidden><button id="installApp" class="btn quiet small-btn"></button> <span class="muted">Adds Cardyssey to your device so it opens like an app and works without internet.</span></p>
+          <p id="installIos" class="install-row small muted" hidden>Want Cardyssey to work without internet? Tap the Share button, then <b>Add to Home Screen</b>.</p>
         </div>
         <div class="tentacle" aria-hidden="true"></div>
       </div>

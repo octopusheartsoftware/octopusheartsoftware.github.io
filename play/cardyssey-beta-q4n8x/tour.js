@@ -3,8 +3,8 @@
 //
 // Each step's run(fast) does its piece of the building. Going Back rebuilds the adventure from
 // scratch, quickly, up to the step before, so every step always starts from the same place.
-import { newItem, newProp, newLook, newButton, uid } from './model.js?v=mvx1vjg6';
-import { stampImage } from './stamps.js?v=mvx1vjg6';
+import { newItem, newProp, newLook, newButton, uid } from './model.js?v=mvx22bff';
+import { stampImage } from './stamps.js?v=mvx22bff';
 
 // The next screen refresh, or a short pause if refreshes have stopped (a hidden tab or window).
 const frame = () => new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 50); });

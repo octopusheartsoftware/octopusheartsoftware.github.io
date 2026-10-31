@@ -5,9 +5,9 @@
 // - your items, and which items you've ever picked up (a picked-up item vanishes from every card)
 // - which locked buttons you've opened (they stay open, even if the item was used up)
 // - changes buttons have made: things shown or hidden, and which look each prop has
-import { CARD_W, CARD_H, cardById, itemById, propById, lookById, shapeSvg, esc } from './model.js?v=mvx1vjg6';
-import { playSound } from './sounds.js?v=mvx1vjg6';
-import { icon } from './icons.js?v=mvx1vjg6';
+import { CARD_W, CARD_H, cardById, itemById, propById, lookById, shapeSvg, esc } from './model.js?v=mvx22bff';
+import { playSound } from './sounds.js?v=mvx22bff';
+import { icon } from './icons.js?v=mvx22bff';
 
 const HISTORY_LIMIT = 300;
 const calm = matchMedia('(prefers-reduced-motion: reduce)');

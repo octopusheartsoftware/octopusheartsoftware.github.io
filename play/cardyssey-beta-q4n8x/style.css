@@ -282,6 +282,8 @@ select { font: 15px/20px var(--font-sans); color: var(--ink); background: var(--
 .tour-actions { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2) !important; }
 .hero-new { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-4) 0 0; }
 .hero-new .btn { font-size: 16px; color: var(--ocean); }
+.install-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 0; }
+.install-row .btn { color: var(--ocean); }
 
 /* The feedback form. */
 .feedback { display: flex; flex-direction: column; gap: var(--space-2); }
