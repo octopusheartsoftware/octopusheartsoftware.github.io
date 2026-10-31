@@ -11,9 +11,16 @@
   const TICK = 0.25;
   const params = new URLSearchParams(location.search);
   const SPEED = +params.get('speed') || 1; // ?speed=4 fast-forwards for testing
-  const PACE = +params.get('pace') || cfg.pace; // ?pace=3 tries a different game pace
   const normCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
   const CODE = normCode(params.get('code'));
+  // Teachers can pick the semester length; it rides at the end of the class code ("SOGGY-PRETZEL-42-20MIN")
+  // so typed codes carry it too. Codes without one are the standard length. A longer semester slows
+  // every clock, deadline and reply window evenly.
+  const LENGTHS = [15, 20, 25, 30];
+  const STANDARD_MINUTES = Math.round(cfg.weeks * cfg.weekSeconds * cfg.pace / 60);
+  const codeMinutes = (code) => { const m = /-(\d+)MIN$/.exec(code); return m && LENGTHS.includes(+m[1]) ? +m[1] : null; };
+  const PACE = +params.get('pace') // ?pace=3 tries a different game pace
+    || (codeMinutes(CODE) ? codeMinutes(CODE) * 60 / (cfg.weeks * cfg.weekSeconds) : cfg.pace);
 
   let S = null; // game state
   let timer = null;
@@ -996,15 +1003,18 @@
   const makeCode = () => [CODE_WORDS[0], CODE_WORDS[1]].map((w) => w[Math.floor(Math.random() * w.length)]).join('-') + '-' + (10 + Math.floor(Math.random() * 90));
   const codeLink = (code) => `${location.origin}${location.pathname}?code=${code}`;
 
-  function showTeacher(code = makeCode()) {
+  function showTeacher(base = makeCode(), minutes = STANDARD_MINUTES) {
+    const code = minutes === STANDARD_MINUTES ? base : `${base}-${minutes}MIN`;
     showOverlay(`<div class="ov teacher"><h2>For teachers</h2>
       <p>Give your class a code, and every student who uses it gets <b>the same semester</b>: the same classes, emails, scams and news stories. That makes it easy to discuss the debrief together.</p>
       <p>Music and sound start <b>off</b> for everyone using a class code, so the room stays quiet. Students can turn sound on if they have headphones.</p>
-      <div class="code-box">${code}</div>
+      <p class="len-pick"><b>Semester length:</b> ${LENGTHS.map((n) => `<button class="btn${n === minutes ? ' primary' : ''}" data-act="teacher-length" data-arg="${base}:${n}" aria-pressed="${n === minutes}">${n} min</button>`).join(' ')}</p>
+      <p class="small">Longer semesters give students more time to read. The same things happen, just more slowly. The length is part of the code.</p>
+      <div class="code-box${code.length > 20 ? ' long' : ''}">${code}</div>
       <p>Share this link, or have students choose "Have a class code?" and type the code:</p>
       <p class="code-link">${esc(codeLink(code))}</p>
       <p><button class="btn primary" data-act="copy-link" data-arg="${code}">Copy link</button>
-      <button class="btn" data-act="teacher">Make a different code</button>
+      <button class="btn" data-act="teacher" data-arg="${minutes}">Make a different code</button>
       <button class="btn" data-act="use-code" data-arg="${code}">Try this code myself</button></p>
       <p><button class="linkbtn light" data-act="restart">Back</button></p></div>`);
   }
@@ -1163,7 +1173,8 @@
     'tut-back': () => { Sound.play('tick'); S.tutorial--; showTutStep(); },
     'tut-skip': () => start(),
     sound: (a) => { Sound.toggle(a); renderSoundBtns(); },
-    teacher: () => showTeacher(),
+    teacher: (a) => showTeacher(undefined, +a || STANDARD_MINUTES),
+    'teacher-length': (a) => { const [base, n] = a.split(':'); showTeacher(base, +n); },
     join: () => showJoin(),
     'join-go': () => { const c = normCode($('join-code').value); if (c) goToCode(c); },
     'use-code': (a) => goToCode(a),

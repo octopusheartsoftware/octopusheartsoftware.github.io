@@ -19,7 +19,7 @@ window.CONTENT = {
     arcadeReliefPerWeek: 10,
     profReplyWindow: 60,
     playerName: 'Alex',
-    version: '0.1.1-beta'
+    version: '0.1.2-beta'
   },
 
   // Three schedule tracks, one per drawn class. Due dates are [week, day] (day 1 = Monday, 7 = Sunday).
