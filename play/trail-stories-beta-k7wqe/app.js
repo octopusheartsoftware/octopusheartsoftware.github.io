@@ -164,7 +164,7 @@ let player = null;
 const narrator = () => $('#narrator').value;
 const recorded = (id) => !!AUDIO.files[narrator()]?.includes(id);
 function play(item) {
-  player = new Audio(`audio/${narrator()}/${item.id}.mp3`);
+  player = new Audio(`audio/${narrator()}/${item.id}.mp3${AUDIO.v ? '?v=' + AUDIO.v : ''}`); // v: set by publish.js so re-recordings aren't served from an old saved copy
   player.playbackRate = +$('#rate').value;
   const done = (fn) => () => { if (speaking === item) fn(); };
   player.onended = done(() => { player = null; finish(item); });
