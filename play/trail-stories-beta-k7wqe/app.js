@@ -135,6 +135,15 @@ function fillVoices() {
   $('#voice').innerHTML = vs.length ? vs.map((v) => `<option${v.name === want ? ' selected' : ''}>${esc(v.name)}</option>`).join('') : '<option>This browser has no voices</option>';
 }
 if (synth) { fillVoices(); synth.onvoiceschanged = fillVoices; }
+// Split only where a sentence really ends: the period in "11.6" or after "St." is not an ending (same rule as tools/voice/narrate.py).
+function sentences(text) {
+  const out = [];
+  for (const part of text.trim().split(/(?<=[.!?]["”']?)\s+/)) {
+    if (out.length && (/\b(St|Mt|Mr|Mrs|Dr|Jr|Sr|U\.S)\.$/.test(out.at(-1)) || /^[a-z]/.test(part))) out[out.length - 1] += ' ' + part;
+    else if (part) out.push(part);
+  }
+  return out;
+}
 function say(item) { queue.push(item); if (!speaking) next(); }
 function next() {
   const item = queue.shift() || null;
@@ -165,7 +174,7 @@ function speakWithDevice(item) {
   if (!synth) { finish(item); return; }
   const v = voices().find((x) => x.name === $('#voice').value);
   // Some browsers cut off long speech, so read a sentence at a time.
-  const parts = (item.title + '. ' + item.text).match(/[^.!?]+[.!?]+["”']?|\S[^.!?]*$/g) || [item.text];
+  const parts = sentences(item.title + '. ' + item.text);
   let i = 0;
   const one = () => {
     if (speaking !== item) return;
@@ -236,6 +245,7 @@ $('#mile').addEventListener('input', (e) => setMile(e.target.value, 'jump'));
 // ---------- The Walk: every stop in trail order, one line each ----------
 function rowBody(s) {
   return `<p>${esc(s.text)}</p>
+    ${s.record ? `<div class="record"><h3>For the record</h3><p>${esc(s.record)}</p></div>` : ''}
     ${s.note ? `<p class="note">To do: ${esc(s.note)}</p>` : ''}
     <div class="actions"><button data-listen="${esc(s.id)}">${speaking?.id === s.id ? '■ Stop' : '▶ Listen now'}</button>
       ${s.checked ? '' : '<span class="draft">Draft · not fact-checked yet</span>'}</div>

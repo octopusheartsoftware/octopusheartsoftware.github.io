@@ -94,6 +94,9 @@ button.primary { background: var(--forest); border-color: var(--forest); color: 
 .row.muted .row-title .name { color: var(--ink-2); }
 .row-body { padding: 0 14px 14px 46px; display: flex; flex-direction: column; gap: 10px; }
 .row-body p { max-width: 65ch; }
+/* exact dates, numbers and official names: shown, never read aloud */
+.record { border-left: 4px solid var(--bark); padding: 4px 0 4px 12px; font-size: 16px; max-width: 65ch; }
+.record h3 { font: 700 13px/1.2 var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--bark); margin-bottom: 2px; }
 .row-body .note { font-size: 16px; font-style: italic; color: var(--ink-2); }
 .row-body .draft { font-size: 15px; color: var(--ink-2); }
 .row-body details { font-size: 16px; }
