@@ -1,130 +1,124 @@
-// Trail Stories test: walk one trail section with a slider and hear what's around you.
-const VERSION = '0.1';
+// Trail Stories test: walk one trail section with a slider.
+// Two parts: "The Walk" (every stop is read aloud when you reach it) and "Field guide" (browse; nothing plays on its own).
+const VERSION = '0.2';
 const S = window.SECTION;
 const $ = (q) => document.querySelector(q);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const TABS = [['near', 'Near me'], ['nature', 'Nature'], ['history', 'History'], ['people', 'People'], ['land', 'The land'], ['fun', 'Fun facts']];
-const KIND = { nature: 'Nature', history: 'History', people: 'People', land: 'The land', fun: 'Fun fact' };
+const TOPICS = [['history', 'History'], ['people', 'People'], ['nature', 'Nature'], ['land', 'The land'], ['fun', 'Fun facts']];
+const KIND = { history: 'History', people: 'People', nature: 'Nature', land: 'The land', fun: 'Fun fact' };
+const GUIDE = [['nature', 'Nature'], ['rocks', 'Under your feet'], ['archives', 'Archives & places']];
 const GROUPS = [['all', 'Everything'], ['plant', 'Plants'], ['bird', 'Birds'], ['fungus', 'Fungi'], ['animal', 'Other animals']];
 const TOTAL = S.trail.at(-1).mi;
+const REACHED = 0.02; // a stop counts as reached this close to its spot
+const CATCH_UP = 0.15; // after a jump, stops this far behind you are still read; ones further back count as passed
 
 // ---------- saved settings (this device only) ----------
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('ts.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('ts.' + k, JSON.stringify(v)); } catch {} },
+  get(k, d) { try { const v = localStorage.getItem('ts2.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('ts2.' + k, JSON.stringify(v)); } catch {} },
 };
 const state = {
-  mile: Math.min(store.get('mile', 0), TOTAL), tab: store.get('tab', 'near'), month: store.get('month', new Date().getMonth() + 1),
-  group: 'all', walking: false, heard: new Set(), lastMile: null,
+  mile: 0, view: store.get('view', 'walk'), guide: store.get('guide', 'nature'), month: store.get('month', new Date().getMonth() + 1),
+  group: 'all', topics: new Set(store.get('topics', TOPICS.map(([t]) => t))),
+  heard: new Set(), passed: new Set(), open: new Set(), walking: false,
 };
 
 // ---------- trail helpers ----------
-const pointAt = (mi) => {
-  const i = Math.min(S.trail.length - 1, Math.max(0, S.trail.findIndex((p) => p.mi >= mi)));
-  return S.trail[i === -1 ? S.trail.length - 1 : i];
-};
-const near = (s, mi = state.mile) => Math.abs(s.mi - mi) <= s.reach;
-const distText = (mi) => {
-  const d = mi - state.mile;
-  if (Math.abs(d) < 0.08) return 'Here';
-  return `${Math.abs(d).toFixed(1)} mi ${d > 0 ? 'ahead' : 'back'}`;
-};
+const pointAt = (mi) => S.trail.find((p) => p.mi >= mi) || S.trail.at(-1);
+const reached = (s, mi = state.mile) => mi >= s.mi - REACHED;
+const willRead = (s) => s.intro || state.topics.has(s.tab);
 const zoneAt = (mi) => S.nature.zones.find((z) => mi >= z.from && mi <= z.to) || S.nature.zones.at(-1);
 const rockAt = (mi) => S.rocks.find((r) => mi >= r.from && mi <= r.to + 0.25) || S.rocks.at(-1);
-const placeNear = (mi) => {
-  const p = S.stories.filter((s) => s.place).sort((a, b) => Math.abs(a.mi - mi) - Math.abs(b.mi - mi))[0];
-  return p && Math.abs(p.mi - mi) < 0.35 ? p.place : '';
-};
+const placeNear = (mi) => { const p = S.places.slice().sort((a, b) => Math.abs(a.mi - mi) - Math.abs(b.mi - mi))[0]; return p && Math.abs(p.mi - mi) < 0.35 ? p.name : ''; };
+const away = (mi) => { const d = mi - state.mile; return Math.abs(d) < 0.05 ? 'Here' : `${Math.abs(d).toFixed(1)} mi ${d > 0 ? 'ahead' : 'back'}`; };
 
-// ---------- colors from the brand kit ----------
-let C = {};
-function readColors() {
+// ---------- theme and colors ----------
+const C = {};
+function applyTheme() {
+  const t = store.get('theme', 'auto');
+  if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   const cs = getComputedStyle(document.documentElement);
-  for (const k of ['ocean', 'aqua', 'sky', 'line', 'ink', 'ink-muted', 'surface', 'surface-raised']) C[k] = cs.getPropertyValue('--' + k).trim();
+  for (const k of ['paper', 'card', 'ink', 'ink-2', 'forest', 'line', 'trail-ahead', 'blaze', 'bark']) C[k] = cs.getPropertyValue('--' + k).trim();
 }
 
-// ---------- map ----------
+// ---------- map and elevation ----------
 const map = $('#map'), prof = $('#profile');
 let proj = null;
-function setupCanvas(cv) {
+function canvas(cv) {
   const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1;
   cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
   const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, w: r.width, h: r.height };
 }
 function drawMap() {
-  const { ctx, w, h } = setupCanvas(map);
+  const { ctx, w, h } = canvas(map);
   const lats = S.trail.map((p) => p.lat), lngs = S.trail.map((p) => p.lng);
   const s0 = Math.min(...lats), n0 = Math.max(...lats), w0 = Math.min(...lngs), e0 = Math.max(...lngs);
-  const k = Math.cos(((s0 + n0) / 2) * Math.PI / 180);
-  const pad = 34, sx = (w - pad * 2) / ((e0 - w0) * k), sy = (h - pad * 2) / (n0 - s0), sc = Math.min(sx, sy);
+  const k = Math.cos(((s0 + n0) / 2) * Math.PI / 180), pad = 36;
+  const sc = Math.min((w - pad * 2) / ((e0 - w0) * k), (h - pad * 2) / (n0 - s0));
   const ox = (w - (e0 - w0) * k * sc) / 2, oy = (h - (n0 - s0) * sc) / 2;
   proj = (lat, lng) => [ox + (lng - w0) * k * sc, oy + (n0 - lat) * sc];
   ctx.clearRect(0, 0, w, h);
-
   const line = (from, to, color, width) => {
     ctx.beginPath(); let first = true;
     for (const p of S.trail) if (p.mi >= from && p.mi <= to) { const [x, y] = proj(p.lat, p.lng); first ? ctx.moveTo(x, y) : ctx.lineTo(x, y); first = false; }
     ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
   };
-  line(0, TOTAL, C.line, 6);
-  line(0, state.mile, C.ocean, 6);
-
-  // story pins
+  line(0, TOTAL, C['trail-ahead'], 6);
+  line(0, state.mile, C.forest, 6);
+  // a white blaze at each stop (filled green once heard)
   for (const s of S.stories) {
-    const p = pointAt(s.mi), [x, y] = proj(p.lat, p.lng), on = near(s);
-    ctx.beginPath(); ctx.arc(x, y, on ? 6 : 4.5, 0, Math.PI * 2);
-    ctx.fillStyle = C['surface-raised']; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = on ? C.ocean : C['ink-muted']; ctx.stroke();
+    const p = pointAt(s.mi), [x, y] = proj(p.lat, p.lng), big = speaking?.id === s.id;
+    const bw = big ? 9 : 6, bh = big ? 15 : 10;
+    ctx.fillStyle = state.heard.has(s.id) ? C.forest : C.blaze; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+    ctx.fillRect(x - bw / 2, y - bh / 2, bw, bh); ctx.strokeRect(x - bw / 2, y - bh / 2, bw, bh);
   }
-  // place labels
-  ctx.font = '600 13px "Source Sans 3", system-ui, sans-serif'; ctx.textBaseline = 'middle';
-  const labelled = new Set();
-  for (const s of S.stories) {
-    if (!s.place || labelled.has(s.place)) continue; labelled.add(s.place);
-    const p = pointAt(s.mi), [x, y] = proj(p.lat, p.lng);
-    const right = x < w * 0.6, tx = right ? x + 10 : x - 10;
-    ctx.textAlign = right ? 'left' : 'right';
-    ctx.lineWidth = 4; ctx.strokeStyle = C['surface-raised']; ctx.strokeText(s.place, tx, y - 12);
-    ctx.fillStyle = C.ink; ctx.fillText(s.place, tx, y - 12);
+  ctx.font = '700 14px "Source Sans 3", system-ui, sans-serif'; ctx.textBaseline = 'middle';
+  const taken = [];
+  for (const pl of S.places) {
+    const p = pointAt(pl.mi), [x, y] = proj(p.lat, p.lng), tw = ctx.measureText(pl.name).width;
+    // Try right-above, left-above, right-below, left-below; take the first spot that doesn't cover another label.
+    const spots = [[x + 10, y - 14], [x - 10 - tw, y - 14], [x + 10, y + 14], [x - 10 - tw, y + 14]];
+    const fits = ([lx, ly]) => lx >= 2 && lx + tw <= w - 2 && !taken.some((r) => lx < r.x + r.w + 4 && lx + tw + 4 > r.x && Math.abs(ly - r.y) < 16);
+    const [lx, ly] = spots.find(fits) || spots[0];
+    taken.push({ x: lx, y: ly, w: tw });
+    ctx.textAlign = 'left';
+    ctx.lineWidth = 5; ctx.strokeStyle = C.card; ctx.strokeText(pl.name, lx, ly);
+    ctx.fillStyle = C.ink; ctx.fillText(pl.name, lx, ly);
   }
-  // you
   const me = pointAt(state.mile), [mx, my] = proj(me.lat, me.lng);
-  ctx.beginPath(); ctx.arc(mx, my, 10, 0, Math.PI * 2); ctx.fillStyle = C['surface-raised']; ctx.fill();
-  ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2); ctx.fillStyle = C.aqua; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
-
-  // north arrow and a one-mile scale bar
-  ctx.fillStyle = C['ink-muted']; ctx.textAlign = 'left'; ctx.font = '600 12px "Source Sans 3", system-ui, sans-serif';
+  ctx.beginPath(); ctx.arc(mx, my, 11, 0, Math.PI * 2); ctx.fillStyle = C.card; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+  ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2); ctx.fillStyle = C.forest; ctx.fill();
+  ctx.fillStyle = C.ink; ctx.textAlign = 'left'; ctx.font = '700 13px "Source Sans 3", system-ui, sans-serif';
   ctx.fillText('N ↑', 10, 16);
   const barPx = (1 / 69.17) * sc; // one mile is about 1/69 of a degree of latitude
   ctx.fillRect(10, h - 14, barPx, 3); ctx.fillText('1 mile', 14 + barPx, h - 12);
-  ctx.textAlign = 'right'; ctx.fillText('North Carolina ↓  Tennessee ↑', w - 10, h - 12);
+  ctx.textAlign = 'right'; ctx.fillText('Tennessee ↑  North Carolina ↓', w - 10, h - 12);
 }
 function drawProfile() {
-  const { ctx, w, h } = setupCanvas(prof);
+  const { ctx, w, h } = canvas(prof);
   const fts = S.trail.map((p) => p.ft), lo = Math.min(...fts) - 100, hi = Math.max(...fts) + 100;
-  const X = (mi) => 8 + (mi / TOTAL) * (w - 16), Y = (ft) => 6 + (1 - (ft - lo) / (hi - lo)) * (h - 22);
+  const X = (mi) => 8 + (mi / TOTAL) * (w - 16), Y = (ft) => 6 + (1 - (ft - lo) / (hi - lo)) * (h - 24);
   ctx.clearRect(0, 0, w, h);
-  ctx.beginPath(); ctx.moveTo(X(0), h - 16);
-  for (const p of S.trail) ctx.lineTo(X(p.mi), Y(p.ft));
-  ctx.lineTo(X(TOTAL), h - 16); ctx.closePath(); ctx.fillStyle = C.sky; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(X(0), h - 18); for (const p of S.trail) ctx.lineTo(X(p.mi), Y(p.ft)); ctx.lineTo(X(TOTAL), h - 18); ctx.closePath();
+  ctx.fillStyle = C.line; ctx.fill();
   ctx.beginPath(); S.trail.forEach((p, i) => (i ? ctx.lineTo(X(p.mi), Y(p.ft)) : ctx.moveTo(X(p.mi), Y(p.ft))));
-  ctx.strokeStyle = C.ocean; ctx.lineWidth = 2; ctx.stroke();
-  const me = pointAt(state.mile);
-  ctx.fillStyle = C.ink; ctx.fillRect(X(state.mile) - 1, 4, 2, h - 20);
-  ctx.beginPath(); ctx.arc(X(state.mile), Y(me.ft), 5, 0, Math.PI * 2); ctx.fillStyle = C.aqua; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '12px "Source Sans 3", system-ui, sans-serif'; ctx.fillStyle = C['ink-muted']; ctx.textBaseline = 'alphabetic';
-  ctx.textAlign = 'left'; ctx.fillText('mile 0', X(0), h - 2);
-  ctx.textAlign = 'right'; ctx.fillText(`mile ${TOTAL.toFixed(1)}`, X(TOTAL), h - 2);
-  ctx.textAlign = 'center'; ctx.fillText(`${Math.max(...fts).toLocaleString()} ft high · ${Math.min(...fts).toLocaleString()} ft low`, w / 2, h - 2);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = C.forest; ctx.fillRect(X(state.mile) - 1.5, 4, 3, h - 22);
+  ctx.beginPath(); ctx.arc(X(state.mile), Y(pointAt(state.mile).ft), 5, 0, Math.PI * 2); ctx.fill();
+  ctx.font = '600 13px "Source Sans 3", system-ui, sans-serif'; ctx.fillStyle = C['ink-2']; ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left'; ctx.fillText('mile 0', X(0), h - 3);
+  ctx.textAlign = 'right'; ctx.fillText(`mile ${TOTAL.toFixed(1)}`, X(TOTAL), h - 3);
+  ctx.textAlign = 'center'; ctx.fillText(`${Math.max(...fts).toLocaleString()} ft high · ${Math.min(...fts).toLocaleString()} ft low`, w / 2, h - 3);
 }
 function mileFromMap(ev) {
   if (!proj) return;
   const r = map.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
   let best = 0, d = Infinity;
   for (const p of S.trail) { const [px, py] = proj(p.lat, p.lng), dd = (px - x) ** 2 + (py - y) ** 2; if (dd < d) { d = dd; best = p.mi; } }
-  setMile(best, true);
+  setMile(best, 'jump');
 }
 let dragging = false;
 map.addEventListener('pointerdown', (e) => { dragging = true; map.setPointerCapture(e.pointerId); mileFromMap(e); });
@@ -134,29 +128,31 @@ map.addEventListener('pointerup', () => (dragging = false));
 // ---------- reading aloud ----------
 const synth = window.speechSynthesis;
 const queue = [];
-let speaking = null;
-function voices() { return synth ? synth.getVoices().filter((v) => /^en/i.test(v.lang)) : []; }
+let speaking = null, walkTimer = null, pausedForStory = false;
+const voices = () => (synth ? synth.getVoices().filter((v) => /^en/i.test(v.lang)) : []);
 function fillVoices() {
-  const sel = $('#voice'), vs = voices(), want = store.get('voice', '');
-  sel.innerHTML = vs.length ? vs.map((v) => `<option value="${esc(v.name)}"${v.name === want ? ' selected' : ''}>${esc(v.name)}</option>`).join('')
-    : '<option>Your browser has no voices</option>';
+  const want = store.get('voice', ''), vs = voices();
+  $('#voice').innerHTML = vs.length ? vs.map((v) => `<option${v.name === want ? ' selected' : ''}>${esc(v.name)}</option>`).join('') : '<option>This browser has no voices</option>';
 }
 if (synth) { fillVoices(); synth.onvoiceschanged = fillVoices; }
 function say(item) { queue.push(item); if (!speaking) next(); }
 function next() {
-  const item = queue.shift();
-  document.querySelectorAll('.story.speaking').forEach((el) => el.classList.remove('speaking'));
-  if (!item || !synth) { speaking = null; $('#nowPlaying').hidden = true; resumeWalk(); return; }
+  const item = queue.shift() || null;
   speaking = item;
-  $('#nowPlaying').hidden = false; $('#nowTitle').textContent = item.title;
-  document.querySelector(`[data-id="${CSS.escape(item.id)}"]`)?.classList.add('speaking');
-  // Chrome cuts off long speech, so read one sentence at a time.
-  const parts = (item.title + '. ' + item.text).match(/[^.!?]+[.!?]+["”']?|\S[^.!?]*$/g) || [item.text];
+  $('#nowPlaying').hidden = !item;
+  if (item) $('#nowTitle').textContent = item.title;
+  pausedForStory = !!item && state.walking; // the walk waits while a stop is read
+  updateWalk();
+  drawMap();
+  if (!item) return;
+  if (!synth) { finish(item); return; }
   const v = voices().find((x) => x.name === $('#voice').value);
+  // Some browsers cut off long speech, so read a sentence at a time.
+  const parts = (item.title + '. ' + item.text).match(/[^.!?]+[.!?]+["”']?|\S[^.!?]*$/g) || [item.text];
   let i = 0;
   const one = () => {
     if (speaking !== item) return;
-    if (i >= parts.length) { state.heard.add(item.id); next(); return; }
+    if (i >= parts.length) return finish(item);
     const u = new SpeechSynthesisUtterance(parts[i++].trim());
     if (v) u.voice = v;
     u.rate = +$('#rate').value;
@@ -165,169 +161,249 @@ function next() {
   };
   one();
 }
+function finish(item) { if (S.stories.includes(item)) state.heard.add(item.id); next(); }
 function stopSpeaking() { queue.length = 0; speaking = null; synth?.cancel(); next(); }
 $('#stopBtn').onclick = stopSpeaking;
 
 // ---------- walking ----------
-let walkTimer = null, pausedForStory = false;
 function setWalking(on) {
   state.walking = on;
-  $('#walkBtn .ic').textContent = on ? '❚❚' : '▶';
-  $('#walkBtn .tx').textContent = on ? 'Pause' : (state.mile >= TOTAL ? 'Walk again' : 'Walk');
   clearInterval(walkTimer);
-  if (!on) return;
-  if (state.mile >= TOTAL) setMile(0, true);
+  $('#walkBtn .ic').textContent = on ? '❚❚' : '▶';
+  $('#walkBtn .tx').textContent = on ? 'Pause' : 'Walk';
+  if (!on) { pausedForStory = false; return; }
+  if (state.mile >= TOTAL) setMile(0, 'jump');
+  catchUp();
+  pausedForStory = !!speaking;
   walkTimer = setInterval(() => {
     if (pausedForStory) return;
-    const m = Math.min(TOTAL, state.mile + +$('#speed').value / 4);
-    setMile(m);
-    if (m >= TOTAL) setWalking(false);
+    setMile(Math.min(TOTAL, state.mile + +$('#speed').value / 4), 'walk');
+    if (state.mile >= TOTAL && !speaking) setWalking(false);
   }, 250);
 }
-function resumeWalk() { pausedForStory = false; }
 $('#walkBtn').onclick = () => setWalking(!state.walking);
+// Read stops you're standing at (or just past) that haven't been read yet.
+function catchUp() {
+  if (!$('#autoRead').checked) return;
+  for (const s of S.stories) {
+    if (reached(s) && state.mile - s.mi <= CATCH_UP && willRead(s) && !state.heard.has(s.id) && !queue.includes(s) && speaking !== s) { state.passed.delete(s.id); say(s); }
+  }
+}
 
-// ---------- moving along ----------
-function setMile(mi, jumped = false) {
+function setMile(mi, how) {
   const before = state.mile;
   state.mile = Math.max(0, Math.min(TOTAL, +(+mi).toFixed(2)));
   $('#mile').value = state.mile;
-  store.set('mile', state.mile);
-  // A jump back starts a fresh walk; moving forward reads anything you've just reached.
-  if (state.mile < before) for (const s of S.stories) if (!near(s)) state.heard.delete(s.id); // going back lets you hear them again
-  if ($('#autoRead').checked && state.mile >= before) {
-    for (const s of S.stories) if (near(s) && !state.heard.has(s.id) && !queue.includes(s) && speaking !== s) {
-      say(s); if (state.walking) pausedForStory = true;
+  if (state.mile < before) {
+    // Going back: stops ahead of you can be heard again.
+    for (const s of S.stories) if (!reached(s)) { state.heard.delete(s.id); state.passed.delete(s.id); }
+  } else {
+    for (const s of S.stories) {
+      if (!reached(s) || reached(s, before)) continue; // only stops you've just walked past
+      const tooFar = how === 'jump' && state.mile - s.mi > CATCH_UP;
+      if (tooFar || !$('#autoRead').checked || !willRead(s)) state.passed.add(s.id);
+      else if (!state.heard.has(s.id) && !queue.includes(s) && speaking !== s) say(s);
     }
   }
-  render();
-}
-$('#mile').max = TOTAL;
-$('#mile').addEventListener('input', (e) => setMile(e.target.value, true));
-
-// ---------- the list ----------
-function storyCard(s, extra = '') {
-  return `<article class="card story${speaking?.id === s.id ? ' speaking' : ''}" data-id="${esc(s.id)}">
-    <div class="meta"><span class="label kind">${KIND[s.tab]}</span><span class="dist">${extra || distText(s.mi)}${!extra && s.off > 0.25 ? ` · ${s.off.toFixed(1)} mi side trail` : ''}</span>
-      ${s.checked ? '' : '<span class="draft" title="Written from the sources below, not yet checked by a person">Draft · not fact-checked yet</span>'}</div>
-    <h3 class="heading-3">${esc(s.title)}</h3>
-    <p class="text">${esc(s.text)}</p>
-    ${s.note ? `<p class="note">To do: ${esc(s.note)}</p>` : ''}
-    <div class="actions"><button class="listen" data-listen="${esc(s.id)}">🔊 Listen</button></div>
-    <details><summary>Where this comes from</summary><ul>${s.sources.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join('')}</ul></details>
-  </article>`;
-}
-function rockCard() {
-  const r = rockAt(state.mile); if (!r) return '';
-  const made = r.made.length > 1 ? r.made.slice(0, -1).join(', ') + ' and ' + r.made.at(-1) : r.made[0];
-  const s = { id: 'rock-' + r.name, tab: 'land', title: `Under your feet: ${r.name}`, mi: state.mile, checked: 'data',
-    text: `You're walking on the ${r.name}${made ? `: mostly ${made}` : ''}. It's about ${r.ma} million years old, from the ${r.age}.`
-      + (r.squeezed ? ' It started out as mud and sand, then was squeezed and heated deep underground when the Appalachians were pushed up.' : '')
-      + (r.pyrite ? ' In places it holds pyrite, fool\'s gold.' : ''),
-    sources: [{ label: 'Macrostrat geologic map data (CC BY 4.0)', url: 'https://macrostrat.org/' }] };
-  return storyCard(s, `Mile ${r.from.toFixed(1)}–${r.to.toFixed(1)}`).replace('data-id=', 'data-gen="1" data-id=');
-}
-function speciesGrid() {
-  const z = zoneAt(state.mile), list = z.months[state.month] || [];
-  const inGroup = (g) => state.group === 'all' || (state.group === 'animal' ? !['plant', 'bird', 'fungus'].includes(g) : g === state.group);
-  const items = list.map(([key, n]) => ({ key, n, ...S.nature.species[key] })).filter((s) => inGroup(s.group));
-  const filt = `<div class="filters" role="group" aria-label="Show">${GROUPS.map(([g, l]) => `<button data-group="${g}" aria-pressed="${state.group === g}">${l}</button>`).join('')}</div>`;
-  if (!items.length) return filt + `<p class="card empty">Nobody has shared openly licensed records of these here in ${MONTHS[state.month - 1]} yet. Try another month or group.</p>`;
-  return filt + `<p class="small muted">Recorded between mile ${z.from.toFixed(1)} and ${z.to.toFixed(1)} in past ${MONTHS[state.month - 1]}s. Exact spots are never shown, and rare or poached species are left out.</p>
-    <div class="species">${items.map((s) => `<button class="sp" data-sp="${s.key}" aria-label="Listen: ${esc(s.common || s.sci)}">
-      ${s.photo ? `<img class="ph" loading="lazy" src="${esc(s.photo.url)}" alt="">` : '<span class="ph"></span>'}
-      <span class="nm">${esc(cap(s.common) || s.sci)}</span><span class="sci">${esc(s.sci)}</span>
-      <span class="ct">${s.n} record${s.n === 1 ? '' : 's'}${s.photo ? ` · Photo: ${esc(s.photo.by)}, ${s.photo.license}` : ''}</span></button>`).join('')}</div>`;
-}
-const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
-function archiveCards() {
-  return S.archives.filter((a) => Math.abs(a.mi - state.mile) <= 0.75).slice(0, 5).map((a) => `<article class="card story">
-    <div class="meta"><span class="label kind">${a.newspaper ? 'Old newspaper' : 'From the archives'}</span><span class="dist">${distText(a.mi)}</span></div>
-    <img loading="lazy" src="${esc(a.image)}" alt="">
-    <h3 class="heading-3">${esc(a.title)}</h3>
-    ${a.newspaper ? `<p class="small">This page mentions ${esc(a.about === 'Kuwohi' ? 'Clingmans Dome' : a.about)}. We haven't read it yet; it's here to show what the newspaper archive holds.</p>` : ''}
-    <p class="credit">Library of Congress${a.newspaper ? ', Chronicling America' : ''}. ${esc(a.rights)}.</p>
-    <div class="actions"><a href="${esc(a.url)}" target="_blank" rel="noopener">See it at the Library of Congress</a></div></article>`).join('');
-}
-function wikiCards() {
-  return S.wiki.filter((p) => Math.abs(p.mi - state.mile) <= 0.6).map((p) => `<article class="card story">
-    <div class="meta"><span class="label kind">Nearby</span><span class="dist">${distText(p.mi)}${p.off > 0.2 ? `, ${p.off.toFixed(1)} mi off the trail` : ''}</span></div>
-    <h3 class="heading-3">${esc(p.title)}</h3><p class="text">${esc(p.text)}</p>
-    <p class="credit">From <a href="${esc(p.url)}" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA). Not yet checked against original sources.</p></article>`).join('');
-}
-function render() {
   const p = pointAt(state.mile);
   $('#mileRead').textContent = `Mile ${state.mile.toFixed(1)} of ${TOTAL.toFixed(1)}`;
   $('#elevRead').textContent = `${p.ft.toLocaleString()} ft`;
   $('#placeRead').textContent = placeNear(state.mile);
   drawMap(); drawProfile();
+  updateWalk();
+  if (state.view === 'guide') renderGuide(true);
+}
+$('#mile').max = TOTAL;
+$('#mile').addEventListener('input', (e) => setMile(e.target.value, 'jump'));
 
-  const tab = state.tab;
-  $('#month-row').hidden = tab !== 'nature';
-  const here = S.stories.filter((s) => near(s) && (tab === 'near' || s.tab === tab)).sort((a, b) => Math.abs(a.mi - state.mile) - Math.abs(b.mi - state.mile));
-  let html = here.map((s) => storyCard(s)).join('');
-  if (tab === 'people') {
-    const t = S.stories.find((s) => s.treaty);
-    if (t && !here.includes(t)) html += storyCard(t, 'Applies to this whole section');
-    html += `<p class="small muted">This section is written with care and will be offered to the Eastern Band of Cherokee Indians for review before it's shared beyond testing.</p>`;
+// ---------- The Walk: every stop in trail order, one line each ----------
+function rowBody(s) {
+  return `<p>${esc(s.text)}</p>
+    ${s.note ? `<p class="note">To do: ${esc(s.note)}</p>` : ''}
+    <div class="actions"><button data-listen="${esc(s.id)}">${speaking?.id === s.id ? '■ Stop' : '▶ Listen now'}</button>
+      ${s.checked ? '' : '<span class="draft">Draft · not fact-checked yet</span>'}</div>
+    <details><summary>Where this comes from</summary><ul>${s.sources.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join('')}</ul></details>`;
+}
+function buildWalk() {
+  $('#topics').innerHTML = TOPICS.map(([t, l]) => `<button class="chip" data-topic="${t}" aria-pressed="${state.topics.has(t)}">${l}</button>`).join('');
+  $('#stops').innerHTML = S.stories.map((s) => `<li class="row" data-id="${esc(s.id)}">
+      <button class="row-head" aria-expanded="false" data-toggle="${esc(s.id)}">
+        <span class="blaze" aria-hidden="true"></span>
+        <span class="row-title"><span class="kind">${s.intro ? 'Introduction · always read' : KIND[s.tab]}</span><span class="name">${esc(s.title)}</span></span>
+        <span class="status"></span>
+      </button>
+      <div class="row-body" hidden></div></li>`).join('') + '<li class="here"></li>';
+}
+let lastPlaying = null;
+function updateWalk() {
+  const list = $('#stops'), here = list.querySelector('.here');
+  if (!here) return;
+  // Keep the "You are here" line between the stops behind you and the stops ahead.
+  const nextStop = S.stories.find((s) => !reached(s));
+  const anchor = nextStop ? list.querySelector(`[data-id="${CSS.escape(nextStop.id)}"]`) : null;
+  if (anchor ? here.nextElementSibling !== anchor : here !== list.lastElementChild) list.insertBefore(here, anchor);
+  here.textContent = `You are here · mile ${state.mile.toFixed(1)}`;
+  for (const s of S.stories) {
+    const li = list.querySelector(`[data-id="${CSS.escape(s.id)}"]`);
+    const playing = speaking?.id === s.id, heard = state.heard.has(s.id), dist = Math.max(0.1, s.mi - state.mile).toFixed(1);
+    li.querySelector('.status').textContent = playing ? 'Reading now' : heard ? 'Heard ✓'
+      : !willRead(s) ? (reached(s) ? 'Not read aloud' : `in ${dist} mi · not read aloud`)
+      : state.passed.has(s.id) ? 'Passed' : queue.includes(s) ? 'Up next' : reached(s) ? 'Here' : `in ${dist} mi`;
+    li.classList.toggle('heard', heard); li.classList.toggle('playing', playing); li.classList.toggle('muted', !willRead(s));
+    // A row opens only when you open it, or while it's being read.
+    const open = playing || state.open.has(s.id), body = li.querySelector('.row-body');
+    if (open === body.hidden) {
+      body.hidden = !open;
+      li.querySelector('.row-head').setAttribute('aria-expanded', open);
+      if (open) body.innerHTML = rowBody(s);
+    }
+    const btn = open && body.querySelector('[data-listen]');
+    if (btn) btn.textContent = playing ? '■ Stop' : '▶ Listen now';
   }
-  if (tab === 'near' || tab === 'land') html += rockCard();
-  if (tab === 'history') html += archiveCards() + wikiCards();
-  if (tab === 'nature') html += `<h2 class="heading-3 section-title">Seen along this stretch</h2>` + speciesGrid();
-  if (!html) html = `<p class="card empty">Nothing in this tab right around here. Keep walking, or see what's coming up below.</p>`;
-  $('#list').innerHTML = html;
-
-  const ahead = S.stories.filter((s) => s.mi - s.reach > state.mile && (tab === 'near' || tab === 'nature' || s.tab === tab)).filter((s) => tab !== 'nature' || s.tab === 'nature').slice(0, 3);
-  $('#ahead').innerHTML = ahead.length ? `<h2 class="heading-3 section-title">Coming up</h2>` + ahead.map((s) =>
-    `<button class="card story" data-goto="${s.mi - s.reach + 0.01}" style="text-align:left"><span class="meta"><span class="label kind">${KIND[s.tab]}</span><span class="dist">in ${(s.mi - s.reach - state.mile).toFixed(1)} mi</span></span><span class="heading-3">${esc(s.title)}</span></button>`).join('') : '';
+  if (speaking && speaking.id !== lastPlaying && state.view === 'walk' && S.stories.includes(speaking)) {
+    list.querySelector(`[data-id="${CSS.escape(speaking.id)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  lastPlaying = speaking?.id || null;
 }
 
-// ---------- clicks in the list ----------
+// ---------- Field guide: browse; nothing plays on its own ----------
+const guideItems = {};
+function guideRow(x, status) {
+  guideItems[x.id] = x;
+  const open = state.open.has(x.id);
+  return `<li class="row" data-id="${esc(x.id)}"><button class="row-head" aria-expanded="${open}" data-gtoggle="${esc(x.id)}">
+      <span class="blaze" aria-hidden="true" style="visibility:hidden"></span>
+      <span class="row-title"><span class="kind">${esc(x.kind)}</span><span class="name">${esc(x.name)}</span></span><span class="status">${esc(status)}</span></button>
+    <div class="row-body"${open ? '' : ' hidden'}>${open ? x.body : ''}</div></li>`;
+}
+function rockText(r) {
+  const made = r.made.length > 1 ? r.made.slice(0, -1).join(', ') + ' and ' + r.made.at(-1) : r.made[0];
+  return `The ${r.name}${made ? `: mostly ${made}` : ''}. It's about ${r.ma} million years old, from the ${r.age}.`
+    + (r.squeezed ? ' It started out as mud and sand, then was squeezed and heated deep underground when the Appalachians were pushed up.' : '')
+    + (r.pyrite ? ' In places it holds pyrite, fool\'s gold.' : '');
+}
+let guideKey = '';
+function renderGuide(fromWalk = false) {
+  // While walking, only redraw when something you'd see changes.
+  const key = [state.guide, state.month, state.group, zoneAt(state.mile).from, rockAt(state.mile).name, state.guide === 'nature' ? '' : state.mile.toFixed(1)].join('|');
+  if (fromWalk && key === guideKey) return;
+  guideKey = key;
+  $('#guideTabs').innerHTML = GUIDE.map(([g, l]) => `<button role="tab" data-guide="${g}" aria-selected="${state.guide === g}">${l}</button>`).join('');
+  let html = '';
+  if (state.guide === 'nature') {
+    const z = zoneAt(state.mile), list = z.months[state.month] || [];
+    const inGroup = (g) => state.group === 'all' || (state.group === 'animal' ? !['plant', 'bird', 'fungus'].includes(g) : g === state.group);
+    const items = list.map(([key, n]) => ({ key, n, ...S.nature.species[key] })).filter((s) => inGroup(s.group));
+    html += `<div class="guide-bar"><label for="month"><strong>Month</strong></label>
+      <select id="month">${MONTHS.map((m, i) => `<option value="${i + 1}"${i + 1 === state.month ? ' selected' : ''}>${m}</option>`).join('')}</select></div>
+      <p class="guide-note">Plants and animals people have recorded between mile ${z.from.toFixed(1)} and ${z.to.toFixed(1)} in past ${MONTHS[state.month - 1]}s. Exact spots are never shown, and rare or poached species are left out.</p>
+      <div class="filters" role="group" aria-label="Show">${GROUPS.map(([g, l]) => `<button class="chip" data-group="${g}" aria-pressed="${state.group === g}">${l}</button>`).join('')}</div>`;
+    html += items.length ? `<div class="species">${items.map((s) => `<div class="sp">
+        ${s.photo ? `<img class="ph" loading="lazy" src="${esc(s.photo.url)}" alt="">` : '<span class="ph"></span>'}
+        <span class="nm">${esc(cap(s.common) || s.sci)}</span><span class="sci">${esc(s.sci)}</span>
+        <span class="ct">${s.n} record${s.n === 1 ? '' : 's'}${s.photo ? ` · Photo: ${esc(s.photo.by)}, ${s.photo.license}` : ''}</span>
+        <button data-sp="${s.key}">▶ Listen</button></div>`).join('')}</div>`
+      : `<p class="panel empty">Nobody has shared openly licensed records of these here in ${MONTHS[state.month - 1]} yet. Try another month or group.</p>`;
+  } else if (state.guide === 'rocks') {
+    const r = rockAt(state.mile);
+    state.open.add('rock-here');
+    html += `<h3 class="section-title" style="margin-top:0">Right here</h3><ol class="rows">`
+      + guideRow({ id: 'rock-here', kind: `Mile ${r.from.toFixed(1)}–${r.to.toFixed(1)}`, name: r.name, text: rockText(r),
+        body: `<p>${esc(rockText(r))}</p><div class="actions"><button data-say="rock-here">▶ Listen</button></div><p class="credit">Macrostrat geologic map data (CC BY 4.0)</p>` }, '') + '</ol>';
+    html += `<h3 class="section-title">Along the whole walk</h3><ol class="rows">` + S.rocks.map((x, i) => guideRow({ id: 'rock-' + i,
+      kind: `Mile ${x.from.toFixed(1)}–${x.to.toFixed(1)}`, name: x.name, text: rockText(x),
+      body: `<p>${esc(rockText(x))}</p><div class="actions"><button data-say="rock-${i}">▶ Listen</button></div>` }, away(x.from))).join('') + '</ol>';
+  } else {
+    const items = [
+      ...S.archives.map((a, i) => ({ id: 'arch-' + i, mi: a.mi, kind: a.newspaper ? 'Old newspaper' : 'Old photo or drawing', name: a.title,
+        body: `<img loading="lazy" src="${esc(a.image)}" alt="">
+          ${a.newspaper ? `<p>This page mentions ${esc(a.about === 'Kuwohi' ? 'Clingmans Dome' : a.about)}. We haven't read it yet; it's here to show what the newspaper archive holds.</p>` : ''}
+          <p class="credit">Library of Congress${a.newspaper ? ', Chronicling America' : ''}${a.date ? ', ' + esc(a.date) : ''}. ${esc(a.rights)}.</p>
+          <div class="actions"><a href="${esc(a.url)}" target="_blank" rel="noopener">See it at the Library of Congress</a></div>` })),
+      ...S.wiki.map((p, i) => ({ id: 'wiki-' + i, mi: p.mi, kind: 'Nearby place', name: p.title, text: p.text,
+        body: `<p>${esc(p.text)}</p><div class="actions"><button data-say="wiki-${i}">▶ Listen</button></div>
+          <p class="credit">From <a href="${esc(p.url)}" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA). Not yet checked against original sources.</p>` })),
+    ].sort((a, b) => Math.abs(a.mi - state.mile) - Math.abs(b.mi - state.mile));
+    html += `<p class="guide-note">Closest to you first.</p><ol class="rows">` + items.map((x) => guideRow(x, away(x.mi))).join('') + '</ol>';
+  }
+  $('#guide').innerHTML = html;
+  const m = $('#month'); if (m) m.onchange = (e) => { state.month = +e.target.value; store.set('month', state.month); renderGuide(); };
+}
+
+// ---------- switching views ----------
+function showView(v) {
+  state.view = v; store.set('view', v);
+  $('#walkView').hidden = v !== 'walk'; $('#guideView').hidden = v !== 'guide';
+  document.querySelectorAll('#viewNav button').forEach((b) => (b.dataset.view === v ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
+  if (v === 'guide') renderGuide();
+}
+
+// ---------- clicks ----------
 document.addEventListener('click', (e) => {
-  const l = e.target.closest('[data-listen]');
-  if (l) { const s = S.stories.find((x) => x.id === l.dataset.listen) || genStory(l); stopSpeaking(); say(s); return; }
-  const g = e.target.closest('[data-group]');
-  if (g) { state.group = g.dataset.group; render(); return; }
-  const sp = e.target.closest('[data-sp]');
-  if (sp) {
-    const s = S.nature.species[sp.dataset.sp], n = (zoneAt(state.mile).months[state.month] || []).find(([k]) => k == sp.dataset.sp)?.[1];
-    stopSpeaking();
-    say({ id: 'sp' + sp.dataset.sp, title: cap(s.common) || s.sci, text: `${s.common ? `Its scientific name is ${s.sci}. ` : ''}People have recorded it along this stretch ${n} time${n === 1 ? '' : 's'} in past ${MONTHS[state.month - 1]}s.` });
+  const t = (sel) => e.target.closest(sel);
+  let b;
+  if ((b = t('[data-view]'))) return showView(b.dataset.view);
+  if ((b = t('[data-toggle]'))) {
+    const id = b.dataset.toggle, opening = b.getAttribute('aria-expanded') !== 'true';
+    opening ? state.open.add(id) : state.open.delete(id);
+    const body = b.closest('.row').querySelector('.row-body');
+    body.hidden = !opening; b.setAttribute('aria-expanded', opening);
+    if (opening) body.innerHTML = rowBody(S.stories.find((s) => s.id === id));
     return;
   }
-  const go = e.target.closest('[data-goto]');
-  if (go) { setMile(+go.dataset.goto); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  if ((b = t('[data-gtoggle]'))) {
+    const id = b.dataset.gtoggle, opening = b.getAttribute('aria-expanded') !== 'true';
+    opening ? state.open.add(id) : state.open.delete(id);
+    const body = b.closest('.row').querySelector('.row-body');
+    body.hidden = !opening; b.setAttribute('aria-expanded', opening);
+    if (opening) body.innerHTML = guideItems[id].body;
+    return;
+  }
+  if ((b = t('[data-listen]'))) {
+    const s = S.stories.find((x) => x.id === b.dataset.listen);
+    if (speaking?.id === s.id) return stopSpeaking();
+    stopSpeaking(); return say(s);
+  }
+  if ((b = t('[data-say]'))) {
+    const x = guideItems[b.dataset.say];
+    stopSpeaking(); return say({ id: x.id, title: x.name, text: x.text || '' });
+  }
+  if ((b = t('[data-sp]'))) {
+    const key = b.dataset.sp, s = S.nature.species[key], n = (zoneAt(state.mile).months[state.month] || []).find(([k]) => k == key)?.[1];
+    stopSpeaking();
+    return say({ id: 'sp' + key, title: cap(s.common) || s.sci, text: `${s.common ? `Its scientific name is ${s.sci}. ` : ''}People have recorded it along this stretch ${n} time${n === 1 ? '' : 's'} in past ${MONTHS[state.month - 1]}s.` });
+  }
+  if ((b = t('[data-topic]'))) {
+    const tp = b.dataset.topic;
+    state.topics.has(tp) ? state.topics.delete(tp) : state.topics.add(tp);
+    store.set('topics', [...state.topics]); b.setAttribute('aria-pressed', state.topics.has(tp));
+    for (let i = queue.length - 1; i >= 0; i--) if (S.stories.includes(queue[i]) && !willRead(queue[i])) queue.splice(i, 1);
+    if (speaking && S.stories.includes(speaking) && !willRead(speaking)) stopSpeaking();
+    return updateWalk();
+  }
+  if ((b = t('[data-guide]'))) { state.guide = b.dataset.guide; store.set('guide', state.guide); return renderGuide(); }
+  if ((b = t('[data-group]'))) { state.group = b.dataset.group; return renderGuide(); }
 });
-function genStory(btn) { // the rock card isn't in the story list
-  const card = btn.closest('.story');
-  return { id: card.dataset.id, title: card.querySelector('h3').textContent, text: card.querySelector('.text').textContent };
-}
 
-// ---------- tabs, month, menu ----------
-$('#tabs').innerHTML = TABS.map(([id, label]) => `<button role="tab" data-tab="${id}" aria-selected="${state.tab === id}">${label}</button>`).join('');
-$('#tabs').onclick = (e) => {
-  const b = e.target.closest('[data-tab]'); if (!b) return;
-  state.tab = b.dataset.tab; store.set('tab', state.tab);
-  document.querySelectorAll('#tabs button').forEach((x) => x.setAttribute('aria-selected', x === b));
-  render();
-};
-$('#month').innerHTML = MONTHS.map((m, i) => `<option value="${i + 1}"${i + 1 === state.month ? ' selected' : ''}>${m}</option>`).join('');
-$('#month').onchange = (e) => { state.month = +e.target.value; store.set('month', state.month); render(); };
-$('#autoRead').checked = store.get('autoRead', true);
-$('#autoRead').onchange = (e) => store.set('autoRead', e.target.checked);
-$('#rate').value = store.get('rate', 1);
-$('#rate').oninput = (e) => store.set('rate', +e.target.value);
-$('#voice').onchange = (e) => store.set('voice', e.target.value);
+// ---------- menu ----------
 $('#menuBtn').onclick = () => $('#menu').showModal();
 $('#closeMenu').onclick = () => $('#menu').close();
 $('#feedbackBtn').onclick = () => { $('#menu').close(); OHFeedback.open({ app: 'Trail Stories', version: VERSION }); };
+$('#theme').value = store.get('theme', 'auto');
+$('#theme').onchange = (e) => { store.set('theme', e.target.value); applyTheme(); drawMap(); drawProfile(); };
+$('#rate').value = store.get('rate', 1);
+$('#rate').oninput = (e) => store.set('rate', +e.target.value);
+$('#voice').onchange = (e) => store.set('voice', e.target.value);
+$('#autoRead').checked = store.get('autoRead', true);
+$('#autoRead').onchange = (e) => { store.set('autoRead', e.target.checked); if (e.target.checked) catchUp(); };
 
-$('#sectionName').textContent = `${S.name} · ${S.area} · ${TOTAL.toFixed(1)} miles of the Appalachian Trail`;
+// ---------- start ----------
+$("#sectionName").textContent = `${S.name} · ${TOTAL.toFixed(1)} miles · ${S.area.replace(" National Park", "")}`;
 $('#gathered').textContent = `Data gathered ${S.gathered}. Version ${VERSION}.`;
-if (!synth) $('#autoRead').closest('label').insertAdjacentHTML('afterend', '<p class="small muted">This browser can\'t read aloud, but everything is here to read.</p>');
-
-readColors();
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); render(); });
-addEventListener('resize', () => render());
-state.heard = new Set(S.stories.filter((s) => near(s)).map((s) => s.id)); // don't read out a pile of stories on load
-setMile(state.mile);
+if (!synth) $('#autoRead').closest('label').insertAdjacentHTML('afterend', '<p class="hint">This browser can\'t read aloud, but every stop can be read on screen.</p>');
+applyTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); drawMap(); drawProfile(); });
+addEventListener('resize', () => { drawMap(); drawProfile(); });
+buildWalk();
+showView(state.view);
+setMile(0, 'none'); // every walk starts at the trailhead; press Walk to hear the introduction

@@ -6,93 +6,121 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Trail Stories test</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="brand.css">
-  <link rel="stylesheet" href="style.css?v=mvwuloi9">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Zilla+Slab:wght@600;700&display=swap">
+  <link rel="stylesheet" href="style.css?v=mvwwc0sk">
 </head>
 <body>
   <div id="app">
     <header id="top">
       <div>
-        <h1 class="heading-2">Trail Stories</h1>
-        <p class="small muted" id="sectionName"></p>
+        <h1>Trail Stories</h1>
+        <p class="sub" id="sectionName"></p>
       </div>
-      <span class="pill label">Test</span>
+      <span class="tag">Test</span>
       <button id="menuBtn" class="icon-btn" aria-label="Settings and about">⋯</button>
     </header>
 
     <div id="layout">
-      <section id="mapCol" aria-label="Map of the trail">
-        <div class="card map-card">
+      <section id="mapCol" aria-label="Map and walking controls">
+        <div class="panel map-panel">
           <canvas id="map" aria-hidden="true"></canvas>
           <canvas id="profile" aria-hidden="true"></canvas>
         </div>
-
-        <div class="card walk">
+        <div class="panel walk">
           <label for="mile" class="walk-read">
             <strong id="mileRead">Mile 0.0</strong>
-            <span id="elevRead" class="muted"></span>
-            <span id="placeRead" class="muted"></span>
+            <span id="elevRead"></span>
+            <span id="placeRead"></span>
           </label>
-          <input id="mile" type="range" min="0" max="10" step="0.01" value="0" aria-describedby="walkHint">
-          <p id="walkHint" class="small muted">Slide to pretend you're walking. Stories show up as you pass them.</p>
+          <input id="mile" type="range" min="0" max="10" step="0.01" value="0">
+          <p class="hint">Slide to pretend you're walking. This test doesn't use your real location.</p>
           <div class="walk-row">
             <button id="walkBtn" class="primary"><span class="ic" aria-hidden="true">▶</span> <span class="tx">Walk</span></button>
             <select id="speed" aria-label="Walking speed">
-              <option value="0.02">Hiking pace ×20</option>
+              <option value="0.02">Slow</option>
               <option value="0.06" selected>Fast</option>
               <option value="0.2">Very fast</option>
             </select>
-            <label class="check"><input id="autoRead" type="checkbox" checked> Read stories aloud as I reach them</label>
+            <label class="check"><input id="autoRead" type="checkbox" checked> Read aloud as I walk</label>
           </div>
         </div>
       </section>
 
-      <section id="infoCol">
-        <nav id="tabs" role="tablist" aria-label="Kinds of stories"></nav>
-
-        <div id="nowPlaying" class="card now" hidden>
-          <span class="ic" aria-hidden="true">🔊</span>
-          <span id="nowTitle" class="tx"></span>
-          <button id="stopBtn">Stop</button>
+      <section id="mainCol">
+        <!-- The Walk: everything here is read aloud when you reach it -->
+        <div id="walkView" class="view">
+          <div class="view-head">
+            <h2>The Walk</h2>
+            <p>Everything here is read aloud when you reach its spot. Tap any stop to read it now.</p>
+          </div>
+          <div class="topics" role="group" aria-labelledby="topicsLabel">
+            <span id="topicsLabel" class="topics-label">Read aloud:</span>
+            <span id="topics"></span>
+          </div>
+          <ol id="stops" class="rows"></ol>
         </div>
 
-        <div id="month-row" class="small" hidden>
-          <label for="month">Nature for</label>
-          <select id="month"></select>
-          <span class="muted">(what people have recorded here in past years in that month)</span>
+        <!-- Field guide: browse anytime, never read automatically -->
+        <div id="guideView" class="view" hidden>
+          <div class="view-head">
+            <h2>Field guide</h2>
+            <p>Browse anytime. Nothing here plays unless you press Listen.</p>
+          </div>
+          <nav id="guideTabs" class="segmented" role="tablist" aria-label="Field guide sections"></nav>
+          <div id="guide"></div>
         </div>
-
-        <div id="list" aria-live="polite"></div>
-        <div id="ahead"></div>
       </section>
     </div>
   </div>
 
-  <dialog id="menu" class="card">
-    <h2 class="heading-3">Trail Stories test</h2>
-    <p class="small">A desk test of one section of the Appalachian Trail. It doesn't use your real location; you move along the trail with the slider. Nothing you do here leaves your device.</p>
+  <div id="dock">
+    <div id="nowPlaying" hidden>
+      <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span id="nowTitle"></span>
+      <button id="stopBtn">Stop</button>
+    </div>
+    <nav id="viewNav" aria-label="Main">
+      <button data-view="walk" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="5" height="7" rx="2"/><rect x="16" y="14" width="5" height="7" rx="2"/></svg>
+        <span>The Walk</span><small>read to you</small>
+      </button>
+      <button data-view="guide">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6c-2-1.5-5-2-8-2v14c3 0 6 .5 8 2 2-1.5 5-2 8-2V4c-3 0-6 .5-8 2z"/><path d="M12 6v14"/></svg>
+        <span>Field guide</span><small>browse</small>
+      </button>
+    </nav>
+  </div>
+
+  <dialog id="menu">
+    <h2>Trail Stories test</h2>
+    <p>A desk test of one section of the Appalachian Trail. You move along the trail with the slider. Nothing you do here leaves your device.</p>
+    <label class="field">Colors
+      <select id="theme"><option value="auto">Match my device</option><option value="light">Light (best in sun)</option><option value="dark">Dark (dawn and dusk)</option></select>
+    </label>
     <label class="field">Voice <select id="voice"></select></label>
     <label class="field">Reading speed <input id="rate" type="range" min="0.7" max="1.3" step="0.05" value="1"></label>
-    <h3 class="label">Where the information comes from</h3>
-    <ul class="small credits">
-      <li>Trail line and shelters: National Park Service and Appalachian Trail Conservancy</li>
+    <h3>Where the information comes from</h3>
+    <ul class="credits">
+      <li>Trail line: National Park Service and Appalachian Trail Conservancy</li>
       <li>Elevation: USGS 3D Elevation Program</li>
       <li>Plants and animals: GBIF.org, only records free for any use (CC0 and CC BY), with each photo's author shown</li>
       <li>Rocks: Macrostrat (CC BY 4.0)</li>
       <li>Treaty records: US Forest Service, from Royce's <i>Indian Land Cessions</i> (1899)</li>
-      <li>Old photos and drawings: Library of Congress</li>
+      <li>Old photos, drawings and newspapers: Library of Congress</li>
       <li>Nearby places: Wikipedia (CC BY-SA)</li>
       <li>Stories: written for this test from the sources listed under each one. They're drafts and still need a fact check.</li>
     </ul>
-    <p class="small muted" id="gathered"></p>
+    <p class="hint" id="gathered"></p>
     <div class="menu-actions">
       <button id="feedbackBtn">Send feedback</button>
       <button id="closeMenu" class="primary">Done</button>
     </div>
   </dialog>
 
-  <script src="data/smokies-kuwohi-charlies-bunion.js?v=mvwuloi9"></script>
-  <script src="oh-feedback.js?v=mvwuloi9"></script>
-  <script src="app.js?v=mvwuloi9"></script>
+  <script src="data/smokies-kuwohi-charlies-bunion.js?v=mvwwc0sk"></script>
+  <script src="oh-feedback.js?v=mvwwc0sk"></script>
+  <script src="app.js?v=mvwwc0sk"></script>
 </body>
 </html>
