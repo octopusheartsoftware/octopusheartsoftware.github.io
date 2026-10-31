@@ -1,4 +1,4 @@
-/* Trail Stories: its own look (rustic, high contrast for reading in the sun). Every text color meets 7:1 contrast. */
+/* Trail Pal: its own look (rustic, high contrast for reading in the sun). Every text color meets 7:1 contrast. */
 :root {
   --paper: #f6f1e6;       /* page */
   --card: #fffdf7;        /* panels and rows */

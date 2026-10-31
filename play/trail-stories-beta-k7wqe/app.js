@@ -1,4 +1,4 @@
-// Trail Stories test: walk one trail section with a slider.
+// Trail Pal test: walk one trail section with a slider.
 // Two parts: "The Walk" (every stop is read aloud when you reach it) and "Field guide" (browse; nothing plays on its own).
 const VERSION = '0.3';
 const S = window.SECTION;
@@ -445,7 +445,7 @@ document.addEventListener('click', (e) => {
 // ---------- menu ----------
 $('#menuBtn').onclick = () => $('#menu').showModal();
 $('#closeMenu').onclick = () => $('#menu').close();
-$('#feedbackBtn').onclick = () => { $('#menu').close(); OHFeedback.open({ app: 'Trail Stories', version: VERSION }); };
+$('#feedbackBtn').onclick = () => { $('#menu').close(); OHFeedback.open({ app: 'Trail Pal', version: VERSION }); };
 $('#theme').value = store.get('theme', 'auto');
 $('#theme').onchange = (e) => { store.set('theme', e.target.value); applyTheme(); drawMap(); drawProfile(); };
 $('#rate').value = store.get('rate', 1);
