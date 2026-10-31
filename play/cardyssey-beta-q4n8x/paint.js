@@ -4,8 +4,8 @@
 //
 // It paints cards (white paper, CARD_W × CARD_H) and items (see-through paper, square), so the
 // eraser makes white on cards and makes holes on items.
-import { CARD_W, CARD_H } from './model.js?v=mvwumd51';
-import { stampImage } from './stamps.js?v=mvwumd51';
+import { CARD_W, CARD_H } from './model.js?v=mvx1px9v';
+import { stampImage } from './stamps.js?v=mvx1px9v';
 
 const UNDO_LIMIT = 30;
 const FILL_TOLERANCE = 96; // how different a neighbouring color can be and still get filled
@@ -14,8 +14,12 @@ const FREEHAND = new Set(['pencil', 'brush', 'eraser']);
 export class Painter {
   constructor(paper, wet, stage) {
     this.paper = paper; this.wet = wet; this.stage = stage;
+    // The picture is read back often (undo, fill, color picker), so it lives in ordinary memory.
+    // The wet layer is only drawn on while you paint, so it stays on the graphics chip, which keeps
+    // big brush strokes quick. (The browser's "desynchronized" low-delay mode was tried and dropped:
+    // some browsers then can't copy the wet layer onto the picture, and the stroke vanishes.)
     this.ctx = paper.getContext('2d', { willReadFrequently: true });
-    this.wctx = wet.getContext('2d', { willReadFrequently: true });
+    this.wctx = wet.getContext('2d');
     this.tool = 'brush'; this.color = '#000000'; this.size = 10; this.opacity = 1; this.filled = false; this.stamp = 'tree';
     this.undoStack = []; this.redoStack = [];
     this.drag = null; this.text = null; this.loading = 0;
@@ -61,8 +65,9 @@ export class Painter {
 
   toDataURL() { return this.paper.toDataURL('image/png'); }
 
+  // During a stroke the canvas can't move, so its position is measured once when the stroke starts.
   pt(e) {
-    const r = this.wet.getBoundingClientRect();
+    const r = (this.drag && this.drag.rect) || this.wet.getBoundingClientRect();
     return { x: ((e.clientX - r.left) * this.W) / r.width, y: ((e.clientY - r.top) * this.H) / r.height };
   }
 
@@ -93,7 +98,7 @@ export class Painter {
     if (this.tool === 'fill') { this.fill(p); return; }
     if (this.tool === 'stamp') { this.wctx.clearRect(0, 0, this.W, this.H); this.drawStamp(p); this.press(this.opacity); return; }
     this.wet.setPointerCapture(e.pointerId);
-    this.drag = { pointer: e.pointerId, start: p, last: p, lastMid: p };
+    this.drag = { pointer: e.pointerId, start: p, last: p, lastMid: p, rect: this.wet.getBoundingClientRect() };
     this.wctx.clearRect(0, 0, this.W, this.H);
     this.wet.style.opacity = this.tool === 'eraser' ? 1 : this.opacity;
     const w = this.wctx;

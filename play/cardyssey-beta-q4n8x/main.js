@@ -4,19 +4,19 @@ import {
   CARD_W, CARD_H, ITEM_SIZE, MAX_CARDS, MAX_ITEMS, MAX_PROPS, MAX_LOOKS, uid, newCard, newItem, newProp, newLook, newButton,
   newAdventure, normalize, cardById, itemById, propById, lookById, buttonById, nextCardName, nextItemName, nextPropName,
   nextLookName, copyCard, buttonDoesSomething, buttonName, changeText, cardPreview, bounds, shapeSvg, esc, cleanAdventure,
-} from './model.js?v=mvwumd51';
-import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvwumd51';
-import { Painter } from './paint.js?v=mvwumd51';
-import { renderMap, findProblems } from './map.js?v=mvwumd51';
-import { createPlayer } from './play.js?v=mvwumd51';
-import { SOUNDS, playSound } from './sounds.js?v=mvwumd51';
-import { STAMPS, stampSvg } from './stamps.js?v=mvwumd51';
-import { buildDemo } from './demo.js?v=mvwumd51';
-import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvwumd51';
-import { createTour } from './tour.js?v=mvwumd51';
-import { icon } from './icons.js?v=mvwumd51';
+} from './model.js?v=mvx1px9v';
+import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvx1px9v';
+import { Painter } from './paint.js?v=mvx1px9v';
+import { renderMap, findProblems } from './map.js?v=mvx1px9v';
+import { createPlayer } from './play.js?v=mvx1px9v';
+import { SOUNDS, playSound } from './sounds.js?v=mvx1px9v';
+import { STAMPS, stampSvg } from './stamps.js?v=mvx1px9v';
+import { buildDemo } from './demo.js?v=mvx1px9v';
+import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvx1px9v';
+import { createTour } from './tour.js?v=mvx1px9v';
+import { icon } from './icons.js?v=mvx1px9v';
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 const FEEDBACK_EMAIL = 'support@octopusheartsoftware.com';
 const FEEDBACK_URL = 'https://feedback.octopusheartsoftware.com/';
 const $ = (id) => document.getElementById(id);
@@ -74,7 +74,21 @@ function changed() {
   adv.updated = Date.now();
   $('saveState').textContent = 'Saving…';
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveNow, 600);
+  saveTimer = setTimeout(() => saveWhenIdle(0), 1500);
+}
+
+// Saving and redrawing the little previews can freeze a slower tablet for a moment, so autosave
+// waits until no finger, pen or mouse button is down and the browser has a quiet moment.
+// (After about 10 seconds of waiting it saves anyway, in case a "let go" was missed.)
+const pointersDown = new Set();
+document.addEventListener('pointerdown', (e) => pointersDown.add(e.pointerId), true);
+for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, (e) => pointersDown.delete(e.pointerId), true);
+
+function saveWhenIdle(tries) {
+  if (pointersDown.size && tries < 20) { saveTimer = setTimeout(() => saveWhenIdle(tries + 1), 500); return; }
+  pointersDown.clear();
+  if (window.requestIdleCallback) requestIdleCallback(() => { if (saveTimer) saveNow(); }, { timeout: 1000 });
+  else saveNow();
 }
 
 async function saveNow() {

@@ -25,6 +25,8 @@ main { flex: 1; min-height: 0; display: flex; }
 .btn.quiet { background: transparent; border-color: transparent; }
 .btn.quiet:hover { background: var(--sky); }
 .btn.big { padding: var(--space-3) var(--space-6); font-size: 17px; }
+/* An instant pressed look, so a tap shows the moment it lands, before anything else happens */
+.btn:active:not(:disabled), .tool:active, .size:active, .swatch:active { transform: translateY(1px) scale(.97); transition: none; }
 .small-btn { padding: var(--space-1) var(--space-3); font-size: 14px; }
 .danger-text { color: var(--danger); }
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--link); text-decoration: underline; cursor: pointer; text-align: left; }
