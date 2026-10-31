@@ -1,6 +1,6 @@
 // Trail Stories test: walk one trail section with a slider.
 // Two parts: "The Walk" (every stop is read aloud when you reach it) and "Field guide" (browse; nothing plays on its own).
-const VERSION = '0.2';
+const VERSION = '0.3';
 const S = window.SECTION;
 const $ = (q) => document.querySelector(q);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -145,6 +145,23 @@ function next() {
   updateWalk();
   drawMap();
   if (!item) return;
+  if (recorded(item.id)) return play(item);
+  speakWithDevice(item);
+}
+// Recorded narration (Kokoro). A stop without a recording, or one that fails to load, uses the device's voice.
+const AUDIO = window.AUDIO || { voices: [], files: {} };
+let player = null;
+const narrator = () => $('#narrator').value;
+const recorded = (id) => !!AUDIO.files[narrator()]?.includes(id);
+function play(item) {
+  player = new Audio(`audio/${narrator()}/${item.id}.mp3`);
+  player.playbackRate = +$('#rate').value;
+  const done = (fn) => () => { if (speaking === item) fn(); };
+  player.onended = done(() => { player = null; finish(item); });
+  player.onerror = done(() => { player = null; speakWithDevice(item); });
+  player.play().catch(done(() => { player = null; speakWithDevice(item); }));
+}
+function speakWithDevice(item) {
   if (!synth) { finish(item); return; }
   const v = voices().find((x) => x.name === $('#voice').value);
   // Some browsers cut off long speech, so read a sentence at a time.
@@ -154,7 +171,7 @@ function next() {
     if (speaking !== item) return;
     if (i >= parts.length) return finish(item);
     const u = new SpeechSynthesisUtterance(parts[i++].trim());
-    if (v) u.voice = v;
+    if (v) { u.voice = v; u.lang = v.lang; } // Android Chrome ignores the voice unless the language matches it
     u.rate = +$('#rate').value;
     u.onend = one; u.onerror = one;
     synth.speak(u);
@@ -162,7 +179,7 @@ function next() {
   one();
 }
 function finish(item) { if (S.stories.includes(item)) state.heard.add(item.id); next(); }
-function stopSpeaking() { queue.length = 0; speaking = null; synth?.cancel(); next(); }
+function stopSpeaking() { queue.length = 0; speaking = null; player?.pause(); player = null; synth?.cancel(); next(); }
 $('#stopBtn').onclick = stopSpeaking;
 
 // ---------- walking ----------
@@ -222,6 +239,7 @@ function rowBody(s) {
     ${s.note ? `<p class="note">To do: ${esc(s.note)}</p>` : ''}
     <div class="actions"><button data-listen="${esc(s.id)}">${speaking?.id === s.id ? '■ Stop' : '▶ Listen now'}</button>
       ${s.checked ? '' : '<span class="draft">Draft · not fact-checked yet</span>'}</div>
+    ${recorded(s.id) ? '<p class="draft">Narrated by a computer-generated voice (Kokoro).</p>' : ''}
     <details><summary>Where this comes from</summary><ul>${s.sources.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join('')}</ul></details>`;
 }
 function buildWalk() {
@@ -392,8 +410,21 @@ $('#feedbackBtn').onclick = () => { $('#menu').close(); OHFeedback.open({ app: '
 $('#theme').value = store.get('theme', 'auto');
 $('#theme').onchange = (e) => { store.set('theme', e.target.value); applyTheme(); drawMap(); drawProfile(); };
 $('#rate').value = store.get('rate', 1);
-$('#rate').oninput = (e) => store.set('rate', +e.target.value);
+$('#rate').oninput = (e) => { store.set('rate', +e.target.value); if (player) player.playbackRate = +e.target.value; };
 $('#voice').onchange = (e) => store.set('voice', e.target.value);
+// Narrator: the recorded voices first, then the device's own voice.
+$('#narrator').innerHTML = AUDIO.voices.map((v) => `<option value="${esc(v.id)}">${esc(v.label)}</option>`).join('') + '<option value="device">This device\'s voice</option>';
+$('#narrator').value = store.get('narrator', AUDIO.voices[0]?.id || 'device');
+if (!$('#narrator').value) $('#narrator').value = AUDIO.voices[0]?.id || 'device';
+function narratorChanged() {
+  const n = narrator(), have = AUDIO.files[n]?.length || 0;
+  $('#voiceField').hidden = n !== 'device' && have >= S.stories.length;
+  $('#narratorNote').textContent = n === 'device' ? 'Uses the voices built into your phone or computer.'
+    : `A natural-sounding voice made by computer with Kokoro, a free open-source voice. In this test ${have} of ${S.stories.length} stops are recorded; the rest use the device voice below.`;
+  S.stories.forEach((s) => { const b = $(`#stops .row[data-id="${CSS.escape(s.id)}"] .row-body`); if (b && !b.hidden) b.innerHTML = rowBody(s); });
+}
+narratorChanged();
+$('#narrator').onchange = (e) => { store.set('narrator', e.target.value); narratorChanged(); };
 $('#autoRead').checked = store.get('autoRead', true);
 $('#autoRead').onchange = (e) => { store.set('autoRead', e.target.checked); if (e.target.checked) catchUp(); };
 

@@ -1,0 +1,2 @@
+// Written by tools/voice/narrate.py. Do not edit by hand.
+window.AUDIO = {"engine": "Kokoro (open-source, Apache 2.0)", "voices": [{"id": "af_heart", "label": "Heart (American, woman)"}, {"id": "am_michael", "label": "Michael (American, man)"}, {"id": "bf_emma", "label": "Emma (British, woman)"}], "files": {"af_heart": ["bunion-name", "intro", "kuwohi-name", "rockefeller", "spruce-fir"], "am_michael": ["bunion-name", "intro", "kuwohi-name", "rockefeller", "spruce-fir"], "bf_emma": ["bunion-name", "intro", "kuwohi-name", "rockefeller", "spruce-fir"]}};

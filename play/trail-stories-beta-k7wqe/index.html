@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Zilla+Slab:wght@600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=mvwwc0sk">
+  <link rel="stylesheet" href="style.css?v=mvwww0f0">
 </head>
 <body>
   <div id="app">
@@ -99,7 +99,9 @@
     <label class="field">Colors
       <select id="theme"><option value="auto">Match my device</option><option value="light">Light (best in sun)</option><option value="dark">Dark (dawn and dusk)</option></select>
     </label>
-    <label class="field">Voice <select id="voice"></select></label>
+    <label class="field">Narrator <select id="narrator"></select></label>
+    <p class="hint" id="narratorNote"></p>
+    <label class="field" id="voiceField">Device voice <select id="voice"></select></label>
     <label class="field">Reading speed <input id="rate" type="range" min="0.7" max="1.3" step="0.05" value="1"></label>
     <h3>Where the information comes from</h3>
     <ul class="credits">
@@ -110,6 +112,7 @@
       <li>Treaty records: US Forest Service, from Royce's <i>Indian Land Cessions</i> (1899)</li>
       <li>Old photos, drawings and newspapers: Library of Congress</li>
       <li>Nearby places: Wikipedia (CC BY-SA)</li>
+      <li>Recorded narration: Kokoro, an open-source computer voice (Apache 2.0)</li>
       <li>Stories: written for this test from the sources listed under each one. They're drafts and still need a fact check.</li>
     </ul>
     <p class="hint" id="gathered"></p>
@@ -119,8 +122,9 @@
     </div>
   </dialog>
 
-  <script src="data/smokies-kuwohi-charlies-bunion.js?v=mvwwc0sk"></script>
-  <script src="oh-feedback.js?v=mvwwc0sk"></script>
-  <script src="app.js?v=mvwwc0sk"></script>
+  <script src="data/smokies-kuwohi-charlies-bunion.js?v=mvwww0f0"></script>
+  <script src="audio/manifest.js?v=mvwww0f0"></script>
+  <script src="oh-feedback.js?v=mvwww0f0"></script>
+  <script src="app.js?v=mvwww0f0"></script>
 </body>
 </html>
