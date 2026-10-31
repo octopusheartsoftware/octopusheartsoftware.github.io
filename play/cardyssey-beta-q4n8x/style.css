@@ -105,6 +105,19 @@ body[data-view="home"] .adv-bar { display: none; }
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .stage canvas, .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .paper { border-radius: var(--radius-sm); }
+/* Zoom: the view keeps the card's normal size on screen and scrolls; the card inside grows. */
+.stage-holder { position: relative; flex: none; align-self: flex-start; max-width: 100%; }
+.stage-holder:not(.zoomed) { width: 100%; }
+.stage-view.zoomed { overflow: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-soft); overscroll-behavior: contain; }
+.stage-view.zoomed .stage { max-width: none; border-radius: 0; box-shadow: none; }
+.stage-view.moving .stage, .stage-view.moving .stage * { cursor: grab !important; }
+.stage-view.panning .stage, .stage-view.panning .stage * { cursor: grabbing !important; }
+.zoom-chip { position: absolute; top: var(--space-2); right: var(--space-2); font: 600 13px/18px var(--font-sans); color: var(--on-ocean); background: var(--ocean); border: 0; border-radius: var(--radius-full); padding: var(--space-1) var(--space-3); cursor: pointer; box-shadow: var(--shadow-soft); }
+.zoom-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.label-inline { font-weight: 600; }
+.zoom-levels { display: inline-flex; gap: var(--space-1); }
+.zoom-levels .btn { padding: var(--space-1) var(--space-2); font-size: 14px; }
+.zoom-levels .btn[aria-pressed="true"] { background: var(--ocean); border-color: var(--ocean); color: var(--on-ocean); }
 .wet { cursor: crosshair; }
 .stage[data-tool="text"] .wet { cursor: text; }
 .stage[data-tool="fill"] .wet, .stage[data-tool="picker"] .wet { cursor: cell; }

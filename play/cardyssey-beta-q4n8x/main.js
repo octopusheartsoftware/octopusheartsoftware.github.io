@@ -4,19 +4,19 @@ import {
   CARD_W, CARD_H, ITEM_SIZE, MAX_CARDS, MAX_ITEMS, MAX_PROPS, MAX_LOOKS, uid, newCard, newItem, newProp, newLook, newButton,
   newAdventure, normalize, cardById, itemById, propById, lookById, buttonById, nextCardName, nextItemName, nextPropName,
   nextLookName, copyCard, buttonDoesSomething, buttonName, changeText, cardPreview, bounds, shapeSvg, esc, cleanAdventure,
-} from './model.js?v=mvx1px9v';
-import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvx1px9v';
-import { Painter } from './paint.js?v=mvx1px9v';
-import { renderMap, findProblems } from './map.js?v=mvx1px9v';
-import { createPlayer } from './play.js?v=mvx1px9v';
-import { SOUNDS, playSound } from './sounds.js?v=mvx1px9v';
-import { STAMPS, stampSvg } from './stamps.js?v=mvx1px9v';
-import { buildDemo } from './demo.js?v=mvx1px9v';
-import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvx1px9v';
-import { createTour } from './tour.js?v=mvx1px9v';
-import { icon } from './icons.js?v=mvx1px9v';
+} from './model.js?v=mvx1vjg6';
+import { saveAdventure, loadAdventure, listAdventures, deleteAdventure, askToKeep } from './store.js?v=mvx1vjg6';
+import { Painter } from './paint.js?v=mvx1vjg6';
+import { renderMap, findProblems } from './map.js?v=mvx1vjg6';
+import { createPlayer } from './play.js?v=mvx1vjg6';
+import { SOUNDS, playSound } from './sounds.js?v=mvx1vjg6';
+import { STAMPS, stampSvg } from './stamps.js?v=mvx1vjg6';
+import { buildDemo } from './demo.js?v=mvx1vjg6';
+import { buildKitten, buildPizza, buildAlien } from './examples.js?v=mvx1vjg6';
+import { createTour } from './tour.js?v=mvx1vjg6';
+import { icon } from './icons.js?v=mvx1vjg6';
 
-const VERSION = '0.6.1';
+const VERSION = '0.6.2';
 const FEEDBACK_EMAIL = 'support@octopusheartsoftware.com';
 const FEEDBACK_URL = 'https://feedback.octopusheartsoftware.com/';
 const $ = (id) => document.getElementById(id);
@@ -48,6 +48,7 @@ let saveTimer = 0;
 let pending = null;      // an item or prop to open once Make has loaded (from the Map's list)
 const foldsOpen = new Set(); // which folded sections of the button panel are open
 let draft = { what: '', to: '' }; // a change being set up in the button panel
+let zoom = 1;            // how big the picture is shown while making (1 = fits the screen)
 
 const painter = new Painter($('paper'), $('wet'), $('stage'));
 const player = createPlayer($('player'));
@@ -339,6 +340,7 @@ function renderEditor() {
   renderLooks();
   renderButtons();
   renderBtnInfo();
+  applyZoom(); // cards and items are different shapes, so the zoomed view is measured again
   renderPlaced();
   renderPlaceTools();
   const active = document.querySelector('.cards-panel .active');
@@ -876,6 +878,86 @@ placedLayer.addEventListener('pointermove', (e) => {
 function endPlacedDrag(e) { if (!pdrag || e.pointerId !== pdrag.pointer) return; if (pdrag.moved) changed(); pdrag = null; }
 placedLayer.addEventListener('pointerup', endPlacedDrag);
 placedLayer.addEventListener('pointercancel', endPlacedDrag);
+
+// ---------- Zoom ----------
+// Zooming keeps the picture's spot on the screen the same size and lets it scroll, while the picture
+// inside grows. Everything measures where the pointer is on screen, so painting, buttons and placing
+// all keep working zoomed in. To look around: scroll, hold Space and drag, turn on "Move the card",
+// or (once a pen has been used) drag with a finger, since the pen draws and the finger moves.
+
+const ZOOMS = [1, 2, 3, 4];
+const stageView = $('stageView'), stageHolder = stageView.parentElement, stage = $('stage');
+let spaceHeld = false, pan = null;
+
+$('zoomLevels').innerHTML = ZOOMS.map((z) => `<button class="btn" data-zoom="${z}">${z * 100}%</button>`).join('');
+$('zoomLevels').onclick = (e) => { const b = e.target.closest('[data-zoom]'); if (b) setZoom(+b.dataset.zoom); };
+$('zoomChip').onclick = () => setZoom(1);
+$('moveCard').onchange = () => stageView.classList.toggle('moving', $('moveCard').checked && zoom > 1);
+
+function setZoom(z) {
+  // Keep the middle of what you're looking at in the middle
+  const cx = (stageView.scrollLeft + stageView.clientWidth / 2) / (stage.offsetWidth || 1);
+  const cy = (stageView.scrollTop + stageView.clientHeight / 2) / (stage.offsetHeight || 1);
+  zoom = z;
+  applyZoom();
+  stageView.scrollLeft = cx * stage.offsetWidth - stageView.clientWidth / 2;
+  stageView.scrollTop = cy * stage.offsetHeight - stageView.clientHeight / 2;
+}
+
+function applyZoom() {
+  // Measure the picture's normal size first, then grow it inside a view of that size
+  for (const el of [stageHolder, stageView, stage]) el.style.width = el.style.height = '';
+  stageHolder.classList.remove('zoomed'); stageView.classList.remove('zoomed');
+  const base = stage.getBoundingClientRect();
+  const on = zoom > 1 && base.width > 0;
+  if (on) {
+    stageHolder.style.width = stageView.style.width = `${base.width}px`;
+    stageView.style.height = `${base.height}px`;
+    stage.style.width = `${base.width * zoom}px`;
+    stageHolder.classList.add('zoomed'); stageView.classList.add('zoomed');
+  }
+  stageView.classList.toggle('moving', on && $('moveCard').checked);
+  $('zoomChip').hidden = !on;
+  $('zoomChip').textContent = `Zoom ${zoom * 100}% · back to 100%`;
+  $('zoomTip').hidden = !on;
+  for (const b of $('zoomLevels').children) b.setAttribute('aria-pressed', +b.dataset.zoom === zoom);
+}
+window.addEventListener('resize', () => { if (view === 'make') setZoom(zoom); });
+
+// Dragging to look around. This listens before the paint, button and placing layers, and keeps the
+// drag to itself when it's a move, so nothing gets painted or nudged by accident.
+stageView.addEventListener('pointerdown', (e) => {
+  if (zoom === 1) return;
+  const fingerWithPen = e.pointerType === 'touch' && painter.penSeen;
+  if (!($('moveCard').checked || spaceHeld || fingerWithPen || e.button === 1)) return;
+  e.preventDefault(); e.stopPropagation();
+  pan = { pointer: e.pointerId, x: e.clientX, y: e.clientY, left: stageView.scrollLeft, top: stageView.scrollTop };
+  stageView.setPointerCapture(e.pointerId);
+  stageView.classList.add('panning');
+}, true);
+stageView.addEventListener('pointermove', (e) => {
+  if (!pan || e.pointerId !== pan.pointer) return;
+  e.stopPropagation();
+  stageView.scrollLeft = pan.left - (e.clientX - pan.x);
+  stageView.scrollTop = pan.top - (e.clientY - pan.y);
+}, true);
+for (const type of ['pointerup', 'pointercancel']) stageView.addEventListener(type, (e) => {
+  if (!pan || e.pointerId !== pan.pointer) return;
+  e.stopPropagation();
+  pan = null;
+  stageView.classList.remove('panning');
+}, true);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== ' ' || view !== 'make' || zoom === 1 || e.target.closest('input, select, textarea, button, summary') || $('dlg').open) return;
+  e.preventDefault(); // Space would otherwise scroll the page
+  if (!spaceHeld) { spaceHeld = true; stageView.classList.add('moving'); }
+});
+document.addEventListener('keyup', (e) => {
+  if (e.key !== ' ' || !spaceHeld) return;
+  spaceHeld = false;
+  stageView.classList.toggle('moving', $('moveCard').checked && zoom > 1);
+});
 
 // ---------- Keyboard shortcuts in Make ----------
 

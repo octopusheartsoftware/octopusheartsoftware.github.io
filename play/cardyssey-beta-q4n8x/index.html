@@ -8,9 +8,9 @@
   <title>Cardyssey</title>
   <meta name="description" content="Draw your own adventure, one card at a time. A free creativity tool from Octopus Heart Software.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="brand.css?v=mvx1px9v">
-  <link rel="stylesheet" href="style.css?v=mvx1px9v">
-  <script type="module" src="main.js?v=mvx1px9v"></script>
+  <link rel="stylesheet" href="brand.css?v=mvx1vjg6">
+  <link rel="stylesheet" href="style.css?v=mvx1vjg6">
+  <script type="module" src="main.js?v=mvx1vjg6"></script>
 </head>
 <body>
   <header class="topbar">
@@ -106,11 +106,16 @@
           <button data-mode="buttons" role="tab">Buttons</button>
           <button data-mode="place" role="tab">Place</button>
         </div>
-        <div id="stage" class="stage">
-          <canvas id="paper" class="paper"></canvas>
-          <canvas id="wet" class="wet"></canvas>
-          <svg id="stickerLayer" class="sticker-layer" viewBox="0 0 960 600"></svg>
-          <svg id="btnLayer" class="btn-layer" viewBox="0 0 960 600"></svg>
+        <div class="stage-holder">
+          <div id="stageView" class="stage-view">
+            <div id="stage" class="stage">
+              <canvas id="paper" class="paper"></canvas>
+              <canvas id="wet" class="wet"></canvas>
+              <svg id="stickerLayer" class="sticker-layer" viewBox="0 0 960 600"></svg>
+              <svg id="btnLayer" class="btn-layer" viewBox="0 0 960 600"></svg>
+            </div>
+          </div>
+          <button id="zoomChip" class="zoom-chip" hidden></button>
         </div>
       </div>
 
@@ -132,6 +137,9 @@
           </div>
           <details class="more">
             <summary>More tools</summary>
+            <div class="zoom-row"><span class="label-inline">Zoom</span><span id="zoomLevels" class="zoom-levels"></span></div>
+            <label class="check"><input type="checkbox" id="moveCard"> Move the card (drag to look around)</label>
+            <p class="small muted" id="zoomTip" hidden>Zoomed in: scroll, hold Space and drag, or turn on Move the card. With a pen, drag with a finger to move.</p>
             <label class="slider">Exact size <input id="sizeSlider" type="range" min="1" max="80"> <output id="sizeOut"></output></label>
             <label class="slider">Opacity (see-through) <input id="opacitySlider" type="range" min="10" max="100" step="5"> <output id="opacityOut"></output></label>
             <label class="check"><input type="checkbox" id="filled"> Filled boxes and ovals</label>
