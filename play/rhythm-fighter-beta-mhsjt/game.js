@@ -4,7 +4,7 @@
 // Look: pen and ink on paper. Solid ink shapes with hand-drawn edges that gently "boil",
 // dry-brush smears behind fast movement, and ink splatters on hits. Red ink only means danger or impact.
 
-const VERSION = '0.1'; // sent with feedback; bump when a test build changes a lot
+const VERSION = '0.2'; // sent with feedback; bump when a test build changes a lot
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), canvas = $('#game'), g = canvas.getContext('2d');
 
@@ -173,9 +173,10 @@ let pose = { ...POSE.guard };
 const view = { W: 400, H: 800, scale: 1, k: 1, dpr: 1 };
 const taught = {};
 
-function newGame() {
-  const spb = 60 / settings.bpm;
+function newGame(cf = null) {
+  const spb = 60 / (cf ? cf.bpm : settings.bpm);
   game = {
+    custom: cf, music: null,
     spb, start: ctx.currentTime + 0.4, moves: [], nextFill: 4, phrase: OPENING.join('').split(''), lastPhrase: '',
     stunUntil: -1, me: 100, foe: FOE_HP, musicBeat: 0, lastCount: -1,
     player: { type: 'idle', t0: -9, side: 1 }, punchSide: 1, busyUntil: 0, punchReady: 0,
@@ -208,6 +209,16 @@ function cancel(m) {
   for (const n of m.nodes) try { n.stop(); } catch {}
 }
 function fillAhead(nb) {
+  if (game.custom) { // your own fight: the script follows the song, and repeats when the song loops
+    const lim = nb + 6;
+    if (game.nextFill < lim) for (const e of scriptBetween(game.custom, game.nextFill, lim)) {
+      if (e.at < 4) continue; // the first bar is the "3, 2, 1, FIGHT!" count-in
+      if (e.type === 'taunt') game.moves.push({ type: 'taunt', hit: e.at, end: e.at + e.len, resolved: true, cancelled: false, nodes: [] });
+      else addMove(e.type, e.at);
+    }
+    game.nextFill = Math.max(game.nextFill, lim);
+    return;
+  }
   while (game.nextFill <= nb + 6) {
     if (!game.phrase.length) game.phrase = pickPhrase().split('');
     const tok = game.phrase.shift(), b = game.nextFill++;
@@ -359,6 +370,7 @@ function hurt(dmg, label, lesson, big) {
 function finish(result) {
   const real = ctx.currentTime;
   game.over = result; game.overAt = real; game.flow = null;
+  stopMusic(2.5);
   for (const m of game.moves) if (!m.resolved || m.type === 'taunt') cancel(m);
   if (result === 'win') {
     sfx.bell(real + 0.1);
@@ -449,8 +461,10 @@ function update() {
   while (!game.over && timeAt(game.musicBeat) < now + 0.25) {
     const b = game.musicBeat, t = timeAt(b);
     if (b >= 0) {
-      sfx.kick(t); sfx.hat(t + game.spb / 2);
-      if (b >= 4) sfx.bass(t, BASSLINE[b % 8], game.spb * 0.5);
+      if (!game.custom) { // your own track replaces the made-in-code loop; the Flow extras still play on top
+        sfx.kick(t); sfx.hat(t + game.spb / 2);
+        if (b >= 4) sfx.bass(t, BASSLINE[b % 8], game.spb * 0.5);
+      }
       if (flowAt(b)) { sfx.hat(t + game.spb / 4); sfx.hat(t + game.spb * 3 / 4); sfx.kick(t + game.spb / 2); } // double time in Flow
       if (game.flow) for (const c of game.flow.combos) if (b >= c.start - 3 && b < c.start) sfx.click(t, b === c.start - 1); // "3, 2, 1" ticks
     }
@@ -602,6 +616,7 @@ let headPos = { x: 200, y: 200 }, camInv = new DOMMatrix(), frozenNow = false;
 
 function resize() {
   const r = stage.getBoundingClientRect();
+  if (!r.width || !r.height) return; // not on screen yet (a hidden tab); the next resize sets it up
   view.dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(r.width * view.dpr);
   canvas.height = Math.round(r.height * view.dpr);
@@ -968,14 +983,157 @@ function frame(ts) {
   if (cal) drawCal();
 }
 
+// ---------- Your own fight: a track plus a fight script written as MIDI in FL Studio ----------
+// In the MIDI, the note's letter is the move, in any octave: C = jab, D = big swing, E = taunt (he drops his
+// guard for as long as the note is held). A note lands where it starts. Other notes are ignored.
+const SCRIPT_NOTES = { 0: 'jab', 2: 'heavy', 4: 'taunt' };
+const BEATS_PER_BAR = 4;
+let customFight = null; // { bpm, first, buffer, events, loopBeats, ... } once both files are loaded
+
+// Reads a standard MIDI file: every note (in beats) from every track, plus the first tempo it mentions.
+function readMidi(buf) {
+  const d = new DataView(buf);
+  let p = 0;
+  const text = n => { let s = ''; for (let i = 0; i < n; i++) s += String.fromCharCode(d.getUint8(p + i)); p += n; return s; };
+  const vlq = () => { let v = 0, b; do { b = d.getUint8(p++); v = v * 128 + (b & 0x7f); } while (b & 0x80); return v; };
+  if (text(4) !== 'MThd') throw new Error('notMidi');
+  const hlen = d.getUint32(p), tracks = d.getUint16(p + 6), div = d.getUint16(p + 8);
+  p += 4 + hlen;
+  if (div & 0x8000) throw new Error('smpte');
+  let tempo = null;
+  const notes = [];
+  for (let k = 0; k < tracks && p + 8 <= d.byteLength; k++) {
+    const id = text(4), len = d.getUint32(p); p += 4;
+    const end = Math.min(p + len, d.byteLength);
+    if (id === 'MTrk') {
+      let tick = 0, run = 0;
+      const open = {};
+      while (p < end) {
+        tick += vlq();
+        let st = d.getUint8(p);
+        if (st & 0x80) p++; else st = run; // "running status": same kind of message as the last one
+        if (st === 0xff) {
+          const type = d.getUint8(p++), l = vlq();
+          if (type === 0x51 && tempo === null) tempo = 60e6 / ((d.getUint8(p) << 16) | (d.getUint8(p + 1) << 8) | d.getUint8(p + 2));
+          p += l;
+        } else if (st === 0xf0 || st === 0xf7) p += vlq();
+        else {
+          run = st;
+          const hi = st & 0xf0, a = d.getUint8(p++), b = hi === 0xc0 || hi === 0xd0 ? 0 : d.getUint8(p++);
+          if (hi === 0x90 && b > 0) (open[a] = open[a] || []).push(tick);
+          else if (hi === 0x80 || hi === 0x90) {
+            const s = open[a] && open[a].shift();
+            if (s !== undefined) notes.push({ note: a, beat: s / div, len: (tick - s) / div });
+          }
+        }
+      }
+    }
+    p = end;
+  }
+  return { tempo, notes: notes.sort((x, y) => x.beat - y.beat) };
+}
+function scriptFromMidi(midi) {
+  const r48 = x => Math.round(x * 48) / 48; // tidy tiny timing wobbles
+  const events = [], counts = { jab: 0, heavy: 0, taunt: 0, other: 0 };
+  for (const n of midi.notes) {
+    const type = SCRIPT_NOTES[n.note % 12];
+    if (!type) { counts.other++; continue; }
+    counts[type]++;
+    events.push({ type, beat: r48(n.beat), len: type === 'taunt' ? Math.max(1, r48(n.len)) : 0 });
+  }
+  return { events, counts };
+}
+// Script moves with absolute beats in [a, b): the script repeats every loopBeats, like the song.
+function scriptBetween(cf, a, b) {
+  const out = [];
+  for (let k = Math.max(0, Math.floor(a / cf.loopBeats)); k * cf.loopBeats < b; k++) {
+    for (const e of cf.events) {
+      if (e.beat >= cf.loopBeats) continue;
+      const at = e.beat + k * cf.loopBeats;
+      if (at >= a && at < b) out.push({ ...e, at });
+    }
+  }
+  return out;
+}
+// The track plays from its first beat and loops whole bars until someone wins.
+function startMusic() {
+  const cf = game.custom, src = ctx.createBufferSource(), gain = ctx.createGain();
+  src.buffer = cf.buffer; src.loop = true;
+  src.loopStart = cf.first; src.loopEnd = cf.first + cf.loopBeats * game.spb;
+  src.connect(gain).connect(master);
+  src.start(game.start, cf.first);
+  game.music = { src, gain };
+}
+function stopMusic(fade = 0) {
+  if (!game || !game.music) return;
+  const { src, gain } = game.music, now = ctx.currentTime;
+  game.music = null;
+  gain.gain.setValueAtTime(gain.gain.value, now);
+  gain.gain.linearRampToValueAtTime(0, now + Math.max(0.02, fade));
+  try { src.stop(now + Math.max(0.02, fade) + 0.05); } catch {}
+}
+
+const cfFiles = { audio: null, midi: null }; // { name, buffer } for each, once read
+function cfSay(text) { $('#cfMsg').textContent = text; }
+async function cfLoadAudio(file) {
+  initAudio();
+  cfSay('Reading your track…');
+  try {
+    const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+    cfFiles.audio = { name: file.name, buffer };
+  } catch { cfFiles.audio = null; cfSay(`Couldn't read "${file.name}" as music. Try a WAV or MP3 exported from FL Studio.`); return; }
+  cfUpdate();
+}
+async function cfLoadMidi(file) {
+  try {
+    const midi = readMidi(await file.arrayBuffer());
+    cfFiles.midi = { name: file.name, ...midi, ...scriptFromMidi(midi) };
+    if (midi.tempo) $('#cfBpm').value = Math.round(midi.tempo * 100) / 100;
+  } catch { cfFiles.midi = null; cfSay(`Couldn't read "${file.name}" as a MIDI file. In FL Studio, use File → Export → MIDI file.`); return; }
+  cfUpdate();
+}
+// Checks what's loaded and says plainly what's missing or what was found.
+function cfUpdate() {
+  customFight = null;
+  $('#cfFight').disabled = true;
+  const a = cfFiles.audio, m = cfFiles.midi, bpm = +$('#cfBpm').value, first = +$('#cfFirst').value || 0;
+  $('#cfAudioName').textContent = a ? a.name : 'No track yet';
+  $('#cfMidiName').textContent = m ? m.name + (m.tempo ? ` (tempo in file: ${Math.round(m.tempo * 100) / 100} BPM)` : '') : 'No fight script yet';
+  if (!a || !m) return cfSay(!a && !m ? 'Pick your track and your fight script.' : !a ? 'Now pick your track.' : 'Now pick your fight script.');
+  if (!(bpm >= 40 && bpm <= 240)) return cfSay('Type the track’s tempo (40 to 240 BPM).');
+  const c = m.counts, moves = c.jab + c.heavy + c.taunt;
+  if (!moves) return cfSay('That MIDI file has no C, D or E notes, so he has no moves. Check the note map below.');
+  const spb = 60 / bpm, bars = Math.floor((a.buffer.duration - first) / (BEATS_PER_BAR * spb) + 1e-6);
+  if (bars < 1) return cfSay('The track is shorter than one bar after its first beat. Check the tempo and first beat.');
+  const loopBeats = bars * BEATS_PER_BAR, events = m.events.filter(e => e.beat < loopBeats);
+  const lastBar = Math.ceil((Math.max(...m.events.map(e => e.beat)) + 1e-6) / BEATS_PER_BAR);
+  customFight = { bpm, first, buffer: a.buffer, events, loopBeats };
+  $('#cfFight').disabled = false;
+  const many = (k, one, more) => `${k} ${k === 1 ? one : more}`;
+  cfSay(`Ready: ${many(c.jab, 'jab', 'jabs')}, ${many(c.heavy, 'big swing', 'big swings')} and ${many(c.taunt, 'taunt', 'taunts')} over ${lastBar} bars. The track is ${bars} bars at ${bpm} BPM and loops until someone wins.`
+    + (events.length < moves ? ` ${moves - events.length} moves come after the track ends, so they're left out.` : '')
+    + (c.other ? ` ${c.other} other notes are ignored.` : ''));
+}
+async function loadExample() {
+  cfSay('Loading the example…');
+  try {
+    const [au, mi] = await Promise.all(['examples/example-track.wav', 'examples/example-fight.mid'].map(u => fetch(u).then(r => { if (!r.ok) throw 0; return r.blob(); })));
+    $('#cfFirst').value = 0;
+    await cfLoadMidi(new File([mi], 'example-fight.mid'));
+    await cfLoadAudio(new File([au], 'example-track.wav'));
+  } catch { cfSay('Couldn’t load the example just now.'); }
+}
+
 // ---------- Screens ----------
-const panels = ['menu', 'cal', 'pause', 'end'];
+const panels = ['menu', 'cal', 'pause', 'end', 'custom'];
 function show(id) { for (const p of panels) $('#' + p).hidden = p !== id; $('#pauseBtn').hidden = id !== null || mode !== 'fight'; }
 
-function startFight() {
+function startFight(cf = null) {
   initAudio();
   ctx.resume();
-  newGame();
+  if (game) stopMusic();
+  newGame(cf);
+  if (cf) startMusic();
   mode = 'fight'; paused = false;
   show(null);
 }
@@ -986,14 +1144,14 @@ function pauseGame() {
 function resumeGame() { paused = false; ctx.resume(); show(null); }
 function toMenu() {
   if (ctx && ctx.state === 'suspended') ctx.resume();
-  if (game) for (const m of game.moves) cancel(m);
+  if (game) { stopMusic(); for (const m of game.moves) cancel(m); }
   game = null; mode = 'menu'; paused = false;
   refreshMenu(); show('menu');
 }
 function showEnd() {
   const st = game.stats, win = game.over === 'win';
   $('#endTitle').textContent = win ? 'K.O.! You win' : 'Down! He got you';
-  $('#endSub').textContent = win ? 'The Metronome is taking a nap.' : 'Every loss teaches you his rhythm. Go again?';
+  $('#endSub').textContent = win ? (game.custom ? 'Your fight script, beaten.' : 'The Metronome is taking a nap.') : 'Every loss teaches you his rhythm. Go again?';
   const secs = Math.round(game.overAt - game.start);
   $('#endStats').innerHTML = [
     ['Fight length', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`],
@@ -1064,8 +1222,15 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape' || e.key === 'p') paused ? resumeGame() : pauseGame();
 });
 $('#calPad').addEventListener('pointerdown', e => { e.preventDefault(); calTap(); });
-$('#fightBtn').onclick = startFight;
-$('#againBtn').onclick = startFight;
+$('#fightBtn').onclick = () => startFight();
+$('#againBtn').onclick = () => startFight(game && game.custom);
+$('#customBtn').onclick = () => { cfUpdate(); show('custom'); };
+$('#cfBack').onclick = () => show('menu');
+$('#cfFight').onclick = () => customFight && startFight(customFight);
+$('#cfExample').onclick = loadExample;
+$('#cfAudio').onchange = e => e.target.files[0] && cfLoadAudio(e.target.files[0]);
+$('#cfMidi').onchange = e => e.target.files[0] && cfLoadMidi(e.target.files[0]);
+for (const id of ['#cfBpm', '#cfFirst']) $(id).oninput = cfUpdate;
 $('#menuBtn').onclick = toMenu;
 $('#feedbackBtn').onclick = () => OHFeedback.open({ app: 'Rhythm Fighter', version: VERSION });
 $('#quitBtn').onclick = toMenu;

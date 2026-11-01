@@ -55,3 +55,12 @@ details b { color: var(--ink); }
 /* Send feedback: a quiet link-style button on the menu, and the shared feedback panel in ink on paper */
 button.quiet { border: 0; padding: 6px 10px; text-decoration: underline; color: var(--dim); }
 :root { --ohfb-bg: var(--paper); --ohfb-ink: var(--ink); --ohfb-muted: var(--dim); --ohfb-accent: var(--ink); --ohfb-on-accent: var(--paper); --ohfb-line: var(--line); }
+
+/* Your own fight: file pickers styled like the other buttons, small number boxes */
+.row.file small { overflow-wrap: anywhere; }
+.pick { position: relative; flex: none; border: 2px solid var(--ink); border-radius: 10px 14px 11px 13px; padding: 10px 16px; cursor: pointer; }
+.pick:hover { background: rgba(21, 18, 15, 0.07); }
+.pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.pick:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.row input[type="number"] { width: 96px; font: inherit; font-size: 16px; color: var(--ink); background: transparent; border: 2px solid var(--ink); border-radius: 8px; padding: 6px 8px; text-align: right; }
+button:disabled { opacity: 0.45; cursor: default; filter: none; }
