@@ -78,9 +78,18 @@ button.primary { background: var(--forest); border-color: var(--forest); color: 
 .chip[aria-pressed="true"] { background: var(--forest); border-color: var(--forest); color: var(--on-forest); }
 .chip[aria-pressed="true"]::before { content: "✓ "; }
 
+.read-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; }
+.read-mode .segmented { margin: 0; flex: 1; min-width: 260px; }
+.link-btn { border: 0; background: none; padding: 0 2px; min-height: 0; color: var(--forest); text-decoration: underline; text-underline-offset: 3px; font-size: inherit; }
+
 /* rows: one line until opened */
 .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .row { background: var(--card); border: 2px solid var(--line); border-radius: var(--r); }
+#stops .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+#stops .row-body { grid-column: 1 / -1; }
+/* the star to pick a stop for your hike; shown while planning, or on any stop you've picked */
+.pick { width: 48px; min-height: 48px; margin-right: 6px; padding: 0; border: 0; background: none; font-size: 26px; line-height: 1; color: var(--bark); visibility: hidden; }
+#stops.picking .pick, .pick[aria-pressed="true"] { visibility: visible; }
 .row.playing { border-color: var(--forest); box-shadow: inset 6px 0 0 var(--forest); }
 .row-head { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; text-align: left;
   border: 0; background: none; border-radius: var(--r); padding: 10px 12px; min-height: 60px; font-weight: 400; }

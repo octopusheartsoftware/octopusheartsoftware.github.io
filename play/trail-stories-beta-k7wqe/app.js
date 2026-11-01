@@ -1,6 +1,6 @@
 // Trail Pal test: walk one trail section with a slider.
 // Two parts: "The Walk" (every stop is read aloud when you reach it) and "Field guide" (browse; nothing plays on its own).
-const VERSION = '0.3';
+const VERSION = '0.4';
 const S = window.SECTION;
 const $ = (q) => document.querySelector(q);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -22,13 +22,15 @@ const store = {
 const state = {
   mile: 0, view: store.get('view', 'walk'), guide: store.get('guide', 'nature'), month: store.get('month', new Date().getMonth() + 1),
   group: 'all', topics: new Set(store.get('topics', TOPICS.map(([t]) => t))),
-  heard: new Set(), passed: new Set(), open: new Set(), walking: false,
+  heard: new Set(), passed: new Set(), open: new Set(), walking: false, focus: null,
+  // Planning ahead: 'all' reads every stop (by topic); 'picks' reads only the stops you picked, so nothing else interrupts.
+  readMode: store.get('readMode', 'all'), picks: new Set(store.get('picks', [])),
 };
 
 // ---------- trail helpers ----------
 const pointAt = (mi) => S.trail.find((p) => p.mi >= mi) || S.trail.at(-1);
 const reached = (s, mi = state.mile) => mi >= s.mi - REACHED;
-const willRead = (s) => s.intro || state.topics.has(s.tab);
+const willRead = (s) => (state.readMode === 'picks' ? state.picks.has(s.id) : s.intro || state.topics.has(s.tab));
 const zoneAt = (mi) => S.nature.zones.find((z) => mi >= z.from && mi <= z.to) || S.nature.zones.at(-1);
 const rockAt = (mi) => S.rocks.find((r) => mi >= r.from && mi <= r.to + 0.25) || S.rocks.at(-1);
 const placeNear = (mi) => { const p = S.places.slice().sort((a, b) => Math.abs(a.mi - mi) - Math.abs(b.mi - mi))[0]; return p && Math.abs(p.mi - mi) < 0.35 ? p.name : ''; };
@@ -55,6 +57,7 @@ function canvas(cv) {
 function drawMap() {
   const { ctx, w, h } = canvas(map);
   const lats = S.trail.map((p) => p.lat), lngs = S.trail.map((p) => p.lng);
+  if (state.focus) { lats.push(state.focus.show.ll[0]); lngs.push(state.focus.show.ll[1]); } // keep a marked place in view
   const s0 = Math.min(...lats), n0 = Math.max(...lats), w0 = Math.min(...lngs), e0 = Math.max(...lngs);
   const k = Math.cos(((s0 + n0) / 2) * Math.PI / 180), pad = 36;
   const sc = Math.min((w - pad * 2) / ((e0 - w0) * k), (h - pad * 2) / (n0 - s0));
@@ -78,6 +81,7 @@ function drawMap() {
   ctx.font = '700 14px "Source Sans 3", system-ui, sans-serif'; ctx.textBaseline = 'middle';
   const taken = [];
   for (const pl of S.places) {
+    if (state.focus?.show.name === pl.name) continue; // the pin labels it
     const p = pointAt(pl.mi), [x, y] = proj(p.lat, p.lng), tw = ctx.measureText(pl.name).width;
     // Try right-above, left-above, right-below, left-below; take the first spot that doesn't cover another label.
     const spots = [[x + 10, y - 14], [x - 10 - tw, y - 14], [x + 10, y + 14], [x - 10 - tw, y + 14]];
@@ -88,6 +92,7 @@ function drawMap() {
     ctx.lineWidth = 5; ctx.strokeStyle = C.card; ctx.strokeText(pl.name, lx, ly);
     ctx.fillStyle = C.ink; ctx.fillText(pl.name, lx, ly);
   }
+  if (state.focus) drawFocus(ctx, w);
   const me = pointAt(state.mile), [mx, my] = proj(me.lat, me.lng);
   ctx.beginPath(); ctx.arc(mx, my, 11, 0, Math.PI * 2); ctx.fillStyle = C.card; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
   ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2); ctx.fillStyle = C.forest; ctx.fill();
@@ -96,6 +101,28 @@ function drawMap() {
   const barPx = (1 / 69.17) * sc; // one mile is about 1/69 of a degree of latitude
   ctx.fillRect(10, h - 14, barPx, 3); ctx.fillText('1 mile', 14 + barPx, h - 12);
   ctx.textAlign = 'right'; ctx.fillText('Tennessee ↑  North Carolina ↓', w - 10, h - 12);
+}
+// "Show on map": a pin on the place a stop is about, a dashed line from where you hear it, and its name.
+function drawFocus(ctx, w) {
+  const s = state.focus, from = pointAt(s.mi), [fx, fy] = proj(from.lat, from.lng), [px, py] = proj(...s.show.ll);
+  if (s.show.off >= 0.1) {
+    ctx.save(); ctx.setLineDash([6, 5]); ctx.strokeStyle = C.bark; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(px, py); ctx.stroke(); ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(px, py - 16, 10, Math.PI * 0.8, Math.PI * 2.2); ctx.lineTo(px, py); ctx.closePath();
+  ctx.fillStyle = C.bark; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.card; ctx.stroke();
+  ctx.beginPath(); ctx.arc(px, py - 16, 4, 0, Math.PI * 2); ctx.fillStyle = C.card; ctx.fill();
+  const label = (s.show.name || s.title) + (s.show.off >= 0.1 ? ` · ${s.show.off.toFixed(1)} mi off the trail` : '');
+  ctx.font = '700 15px "Source Sans 3", system-ui, sans-serif'; ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(label).width, lx = Math.max(4, Math.min(w - tw - 4, px - tw / 2)), ly = py - 36 < 30 ? py + 14 : py - 36; // below the pin if it would crowd the top edge
+  ctx.textAlign = 'left'; ctx.lineWidth = 5; ctx.strokeStyle = C.card; ctx.strokeText(label, lx, ly);
+  ctx.fillStyle = C.bark; ctx.fillText(label, lx, ly);
+}
+function showOnMap(s) {
+  state.focus = state.focus === s ? null : s;
+  drawMap(); updateWalk();
+  const r = $('#map').getBoundingClientRect();
+  if (state.focus && (r.top < 0 || r.bottom > innerHeight)) $('#mapCol').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function drawProfile() {
   const { ctx, w, h } = canvas(prof);
@@ -188,6 +215,13 @@ function speakWithDevice(item) {
   };
   one();
 }
+// After a topic or pick changes: forget queued stops that won't be read now, and stop one that's playing on its own.
+// (A stop you pressed Listen on is never cut off: only ones the walk started.)
+function dropUnread() {
+  for (let i = queue.length - 1; i >= 0; i--) if (S.stories.includes(queue[i]) && !willRead(queue[i])) queue.splice(i, 1);
+  if (speaking && S.stories.includes(speaking) && !willRead(speaking) && speaking.id !== byHand) stopSpeaking();
+}
+let byHand = null; // the stop you last pressed Listen on
 function finish(item) { if (S.stories.includes(item)) state.heard.add(item.id); next(); }
 function stopSpeaking() { queue.length = 0; speaking = null; player?.pause(); player = null; synth?.cancel(); next(); }
 $('#stopBtn').onclick = stopSpeaking;
@@ -249,6 +283,7 @@ function rowBody(s) {
     ${s.record ? `<div class="record"><h3>For the record</h3><p>${esc(s.record)}</p></div>` : ''}
     ${s.note ? `<p class="note">To do: ${esc(s.note)}</p>` : ''}
     <div class="actions"><button data-listen="${esc(s.id)}">${speaking?.id === s.id ? '■ Stop' : '▶ Listen now'}</button>
+      <button data-mapto="${esc(s.id)}">${state.focus === s ? 'Hide on map' : 'Show on map'}</button>
       ${s.checked ? '' : '<span class="draft">Draft · not fact-checked yet</span>'}</div>
     ${recorded(s.id) ? '<p class="draft">Narrated by a computer-generated voice (Kokoro).</p>' : ''}
     <details><summary>Where this comes from</summary><ul>${s.sources.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join('')}</ul></details>`;
@@ -258,10 +293,26 @@ function buildWalk() {
   $('#stops').innerHTML = S.stories.map((s) => `<li class="row" data-id="${esc(s.id)}">
       <button class="row-head" aria-expanded="false" data-toggle="${esc(s.id)}">
         <span class="blaze" aria-hidden="true"></span>
-        <span class="row-title"><span class="kind">${s.intro ? 'Introduction · always read' : KIND[s.tab]}</span><span class="name">${esc(s.title)}</span></span>
+        <span class="row-title"><span class="kind"></span><span class="name">${esc(s.title)}</span></span>
         <span class="status"></span>
       </button>
+      <button class="pick" data-pick="${esc(s.id)}" aria-pressed="false" aria-label="Pick for my hike: ${esc(s.title)}">☆</button>
       <div class="row-body" hidden></div></li>`).join('') + '<li class="here"></li>';
+  updateReadMode();
+}
+// "Read aloud: Every stop / Only my picks". Picks are saved on this device, so you can plan the night before.
+function updateReadMode() {
+  const picks = state.readMode === 'picks';
+  document.querySelectorAll('#readMode button').forEach((b) => b.setAttribute('aria-selected', b.dataset.mode === state.readMode));
+  $('#pickCount').textContent = state.picks.size ? `(${state.picks.size})` : '';
+  $('#walkView .topics').hidden = picks;
+  $('#picksHint').hidden = !picks;
+  $('#picksHint .tx').textContent = state.picks.size
+    ? `On the trail, only your ${state.picks.size} picked stop${state.picks.size === 1 ? '' : 's'} will be read aloud. Everything else stays quiet in the list.`
+    : 'Tap the ☆ beside any stop to pick it. On the trail, only your picks will be read aloud.';
+  $('#clearPicks').hidden = !state.picks.size;
+  $('#stops').classList.toggle('picking', picks);
+  updateWalk();
 }
 let lastPlaying = null;
 function updateWalk() {
@@ -275,8 +326,12 @@ function updateWalk() {
   for (const s of S.stories) {
     const li = list.querySelector(`[data-id="${CSS.escape(s.id)}"]`);
     const playing = speaking?.id === s.id, heard = state.heard.has(s.id), dist = Math.max(0.1, s.mi - state.mile).toFixed(1);
+    const quiet = state.readMode === 'picks' ? 'not picked' : 'not read aloud';
+    li.querySelector('.kind').textContent = s.intro ? (state.readMode === 'picks' ? 'Introduction' : 'Introduction · always read') : KIND[s.tab];
+    const star = li.querySelector('.pick'), picked = state.picks.has(s.id);
+    star.textContent = picked ? '★' : '☆'; star.setAttribute('aria-pressed', picked);
     li.querySelector('.status').textContent = playing ? 'Reading now' : heard ? 'Heard ✓'
-      : !willRead(s) ? (reached(s) ? 'Not read aloud' : `in ${dist} mi · not read aloud`)
+      : !willRead(s) ? (reached(s) ? cap(quiet) : state.readMode === 'picks' ? `in ${dist} mi` : `in ${dist} mi · ${quiet}`) // the empty star already says "not picked"
       : state.passed.has(s.id) ? 'Passed' : queue.includes(s) ? 'Up next' : reached(s) ? 'Here' : `in ${dist} mi`;
     li.classList.toggle('heard', heard); li.classList.toggle('playing', playing); li.classList.toggle('muted', !willRead(s));
     // A row opens only when you open it, or while it's being read.
@@ -288,6 +343,8 @@ function updateWalk() {
     }
     const btn = open && body.querySelector('[data-listen]');
     if (btn) btn.textContent = playing ? '■ Stop' : '▶ Listen now';
+    const mapBtn = open && body.querySelector('[data-mapto]');
+    if (mapBtn) mapBtn.textContent = state.focus === s ? 'Hide on map' : 'Show on map';
   }
   if (speaking && speaking.id !== lastPlaying && state.view === 'walk' && S.stories.includes(speaking)) {
     list.querySelector(`[data-id="${CSS.escape(speaking.id)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -414,7 +471,7 @@ document.addEventListener('click', (e) => {
   if ((b = t('[data-listen]'))) {
     const s = S.stories.find((x) => x.id === b.dataset.listen);
     if (speaking?.id === s.id) return stopSpeaking();
-    stopSpeaking(); return say(s);
+    stopSpeaking(); byHand = s.id; return say(s);
   }
   // Field guide: the same recorded voice as the walk (ids match S.listen), or the device voice if there's no recording.
   const guideSay = (item) => {
@@ -434,9 +491,26 @@ document.addEventListener('click', (e) => {
     const tp = b.dataset.topic;
     state.topics.has(tp) ? state.topics.delete(tp) : state.topics.add(tp);
     store.set('topics', [...state.topics]); b.setAttribute('aria-pressed', state.topics.has(tp));
-    for (let i = queue.length - 1; i >= 0; i--) if (S.stories.includes(queue[i]) && !willRead(queue[i])) queue.splice(i, 1);
-    if (speaking && S.stories.includes(speaking) && !willRead(speaking)) stopSpeaking();
+    dropUnread();
     return updateWalk();
+  }
+  if ((b = t('[data-mapto]'))) return showOnMap(S.stories.find((s) => s.id === b.dataset.mapto));
+  if ((b = t('[data-pick]'))) {
+    const id = b.dataset.pick;
+    state.picks.has(id) ? state.picks.delete(id) : state.picks.add(id);
+    store.set('picks', [...state.picks]);
+    dropUnread();
+    return updateReadMode();
+  }
+  if ((b = t('[data-mode]'))) {
+    state.readMode = b.dataset.mode; store.set('readMode', state.readMode);
+    dropUnread();
+    return updateReadMode();
+  }
+  if ((b = t('#clearPicks'))) {
+    state.picks.clear(); store.set('picks', []);
+    dropUnread();
+    return updateReadMode();
   }
   if ((b = t('[data-guide]'))) { state.guide = b.dataset.guide; store.set('guide', state.guide); return renderGuide(); }
   if ((b = t('[data-group]'))) { state.group = b.dataset.group; return renderGuide(); }

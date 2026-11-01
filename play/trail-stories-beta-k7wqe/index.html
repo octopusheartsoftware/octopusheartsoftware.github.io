@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Zilla+Slab:wght@600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=mvx070ef">
+  <link rel="stylesheet" href="style.css?v=mvyha9b5">
 </head>
 <body>
   <div id="app">
@@ -53,10 +53,18 @@
         <div id="walkView" class="view">
           <div class="view-head">
             <h2>The Walk</h2>
-            <p>Everything here is read aloud when you reach its spot. Tap any stop to read it now.</p>
+            <p>Stops are read aloud when you reach their spot. Tap any stop to read it now.</p>
           </div>
+          <div class="read-mode">
+            <span class="topics-label" id="readModeLabel">Read aloud:</span>
+            <div id="readMode" class="segmented" role="tablist" aria-labelledby="readModeLabel">
+              <button role="tab" data-mode="all">Every stop</button>
+              <button role="tab" data-mode="picks">Only my picks <span id="pickCount"></span></button>
+            </div>
+          </div>
+          <p id="picksHint" class="guide-note" hidden><span class="tx"></span> <button id="clearPicks" class="link-btn">Clear my picks</button></p>
           <div class="topics" role="group" aria-labelledby="topicsLabel">
-            <span id="topicsLabel" class="topics-label">Read aloud:</span>
+            <span id="topicsLabel" class="topics-label">Topics:</span>
             <span id="topics"></span>
           </div>
           <ol id="stops" class="rows"></ol>
@@ -122,9 +130,9 @@
     </div>
   </dialog>
 
-  <script src="data/smokies-kuwohi-charlies-bunion.js?v=mvx070ef"></script>
-  <script src="audio/manifest.js?v=mvx070ef"></script>
-  <script src="oh-feedback.js?v=mvx070ef"></script>
-  <script src="app.js?v=mvx070ef"></script>
+  <script src="data/smokies-kuwohi-charlies-bunion.js?v=mvyha9b5"></script>
+  <script src="audio/manifest.js?v=mvyha9b5"></script>
+  <script src="oh-feedback.js?v=mvyha9b5"></script>
+  <script src="app.js?v=mvyha9b5"></script>
 </body>
 </html>
