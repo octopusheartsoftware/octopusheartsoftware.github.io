@@ -1,0 +1,84 @@
+/* Teacher guide and handouts: printable pages in the game's own palette (variables from ../style.css).
+   Each .sheet is one printed US Letter page; on screen they show as paper on the dorm-room navy. */
+html, body { height: auto; }
+body { background: var(--night); color: var(--ink); font-family: var(--read); font-size: 15px; line-height: 1.45; padding: 24px 16px 60px; }
+.screen-bar { max-width: 8.5in; margin: 0 auto 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; color: var(--paper); }
+.screen-bar a { color: var(--amber); }
+.screen-bar button { background: var(--amber); color: var(--ink); border: 3px solid #000; border-radius: 4px; padding: 6px 14px; font-family: var(--pixel); font-size: 16px; }
+.sheet { max-width: 8.5in; margin: 0 auto 24px; background: var(--paper); padding: 0.5in; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--pixel); font-weight: 600; line-height: 1.15; margin: 0; }
+h2 { font-family: var(--read); font-weight: 700; }
+h1 { font-size: 30px; }
+h2 { font-size: 19px; margin: 14px 0 6px; padding-bottom: 2px; border-bottom: 3px solid var(--ink); }
+h3 { font-size: 16px; margin: 0 0 2px; }
+p { margin: 0 0 6px; }
+ul, ol { margin: 0 0 6px; padding-left: 20px; }
+li { margin-bottom: 3px; }
+code, .code { font-family: var(--pixel); background: var(--paper-2); padding: 0 4px; border-radius: 3px; white-space: nowrap; }
+.sub { color: var(--ink-soft); margin-top: 2px; }
+.small { font-size: 13px; color: var(--ink-soft); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+th, td { text-align: left; vertical-align: top; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--pixel); font-weight: 600; background: var(--paper-2); }
+td.t { white-space: nowrap; font-weight: 700; }
+.tag { display: inline-block; font-size: 12px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; margin: 1px 2px 1px 0; white-space: nowrap; }
+.foot { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-soft); }
+
+/* Guide header */
+.masthead { display: flex; align-items: center; gap: 14px; }
+.masthead img { width: 54px; height: 54px; image-rendering: pixelated; }
+
+/* Handout 1: an email in the game's Mail app */
+.mailwin { border: 3px solid #000; border-radius: 4px; overflow: hidden; }
+.mailwin .bar { background: var(--bezel); color: var(--paper); font-family: var(--pixel); padding: 6px 12px; font-size: 16px; }
+.mailwin .hdr { background: var(--paper-2); padding: 8px 14px; border-bottom: 2px solid var(--line); font-size: 14px; }
+.mailwin .hdr b { display: inline-block; width: 64px; }
+.mailwin .body { padding: 10px 14px 6px; }
+.tells { counter-reset: tell; list-style: none; padding: 0; }
+.tells li { counter-increment: tell; position: relative; min-height: 40px; padding: 5px 0 5px 40px; border-bottom: 1px dashed var(--line); margin: 0; }
+.tells li::before { content: counter(tell); position: absolute; left: 0; top: 5px; width: 28px; height: 28px; background: var(--amber); border: 2px solid #000; border-radius: 4px;
+  font-family: var(--pixel); font-size: 17px; text-align: center; line-height: 24px; }
+.fake { font-family: var(--pixel); color: var(--bad); white-space: nowrap; }
+.real { font-family: var(--pixel); color: var(--good); white-space: nowrap; }
+
+/* Handout 2: a module page on Noodle, the school's course website */
+.noodlewin { border: 3px solid #000; border-radius: 4px; overflow: hidden; }
+.noodlewin .bar { background: var(--amber); border-bottom: 3px solid #000; font-family: var(--pixel); font-size: 18px; padding: 8px 14px; }
+.noodlewin .bar small { font-family: var(--read); font-size: 13px; }
+.noodlewin .body { padding: 10px 14px; }
+.move { display: grid; grid-template-columns: 58px 1fr; gap: 12px; padding: 8px 0; border-bottom: 2px solid var(--line); }
+.move:last-child { border-bottom: 0; }
+.move .letter { width: 58px; height: 58px; background: var(--wall); color: var(--amber); border: 3px solid #000; border-radius: 4px;
+  font-family: var(--pixel); font-size: 38px; text-align: center; line-height: 52px; }
+.move h3 { font-size: 18px; }
+.move .ask { margin: 2px 0 0; }
+.write { display: flex; gap: 8px; margin: 0 0 14px; }
+.write span { flex: 1; border-bottom: 1.5px solid var(--ink-soft); }
+.move .ingame { font-size: 13px; color: var(--ink-soft); margin: 3px 0 0; }
+
+@media (max-width: 700px) {
+  .cols { grid-template-columns: 1fr; }
+  .sheet { padding: 20px 16px; }
+  table, tbody, tr, td { display: block; }
+  thead { display: none; }
+  td.t { padding-bottom: 0; border: 0; }
+}
+
+@page { size: letter; margin: 0.4in; }
+@media print {
+  html, body { background: none; }
+  body { padding: 0; font-size: 10pt; line-height: 1.28; }
+  li { margin-bottom: 1px; }
+  th, td { padding: 2px 5px; }
+  .screen-bar { display: none; }
+  .sheet { max-width: none; margin: 0; padding: 0; border-radius: 0; break-after: page; background: none; }
+  .sheet:last-child { break-after: auto; }
+  h1 { font-size: 22pt; }
+  h2 { font-size: 12.5pt; margin: 7px 0 4px; }
+  p { margin-bottom: 4px; }
+  .small, .foot, .tag { font-size: 8.5pt; }
+  body.handouts { font-size: 11.5pt; line-height: 1.35; }
+  .handouts .write { margin-bottom: 18px; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

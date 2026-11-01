@@ -1030,6 +1030,7 @@
       <p><button class="btn primary" data-act="copy-link" data-arg="${code}">Copy link</button>
       <button class="btn" data-act="teacher" data-arg="${minutes}:${+weekly}">Make a different code</button>
       <button class="btn" data-act="use-code" data-arg="${code}">Try this code myself</button></p>
+      <p class="small">New to the game? Read the one-page <a class="light" href="teachers/" target="_blank" rel="noopener">teacher guide</a> (learning goals, a 50-minute lesson, discussion questions) and print the <a class="light" href="teachers/handouts.html" target="_blank" rel="noopener">phishing and SIFT handouts</a>.</p>
       <p><button class="linkbtn light" data-act="restart">Back</button></p></div>`);
   }
 
