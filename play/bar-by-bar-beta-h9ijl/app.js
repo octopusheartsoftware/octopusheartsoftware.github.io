@@ -2,7 +2,7 @@
 // Bar by Bar test build: pick some bars, loop them, play an instrument along, press Keep to lock it in.
 // Every sound is made in code with the Web Audio API, so there are no sample files.
 
-const VERSION = '0.1';
+const VERSION = '0.2';
 const BEATS = 4;          // beats in a bar
 const GRID = 0.25;        // snap grid in beats (16th notes)
 const BAR_W = 96;         // width of one bar in the song strip, in CSS pixels
@@ -104,20 +104,25 @@ let ctx, master, buses = {}, noiseBuf, fxNodes;
 function audio() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -10; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.2;
-    master = ctx.createGain(); master.gain.value = 0.8;
-    master.connect(comp).connect(ctx.destination);
-    const levels = { drums: 0.9, bass: 0.8, lead: 0.55, click: 0.3, voice: 1 };
-    for (const k in levels) { buses[k] = ctx.createGain(); buses[k].gain.value = levels[k]; }
-    for (const k of ['drums', 'bass', 'lead', 'click']) buses[k].connect(master);
-    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-    const nd = noiseBuf.getChannelData(0);
-    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-    buildVoiceFx();
+    buildGraph();
   }
   if (ctx.state === 'suspended') ctx.resume();
   return ctx;
+}
+// The mixer: instrument levels -> master -> a gentle compressor -> out. Also used to render the song to a file.
+function buildGraph() {
+  buses = {};
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -10; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.2;
+  master = ctx.createGain(); master.gain.value = 0.8;
+  master.connect(comp).connect(ctx.destination);
+  const levels = { drums: 0.9, bass: 0.8, lead: 0.55, click: 0.3, voice: 1 };
+  for (const k in levels) { buses[k] = ctx.createGain(); buses[k].gain.value = levels[k]; }
+  for (const k of ['drums', 'bass', 'lead', 'click']) buses[k].connect(master);
+  noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+  const nd = noiseBuf.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  buildVoiceFx();
 }
 const outLat = () => (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
 
@@ -779,6 +784,71 @@ for (const [id, key] of [['#fxReverb', 'reverb'], ['#fxEcho', 'echo']]) {
 }
 $('#fxRadio').checked = song.fx.radio;
 $('#fxRadio').onchange = () => { song.fx.radio = $('#fxRadio').checked; applyFx(); save(); };
+
+// ---------- Save as audio (WAV) ----------
+// Plays the whole kept song (no click, nothing unkept) into an offline audio context, which runs faster than real
+// time, then wraps it as a 16-bit stereo WAV. It starts at bar 1 so it lines up with bars in FL Studio at the same
+// tempo, and lets the last notes, reverb and echo ring out for a moment at the end.
+const TAIL = 2.5; // seconds of ring-out after the last bar
+async function renderSong() {
+  const bars = lastUsedBar(), rate = 44100;
+  const off = new OfflineAudioContext(2, Math.ceil((bars * BEATS * spb() + TAIL) * rate), rate);
+  const live = { ctx, master, buses, noiseBuf, fxNodes, sounding };
+  ctx = off; sounding = [];
+  try {
+    buildGraph();
+    const t0 = 0.01;
+    for (const ev of song.events) playEvent(ev.inst, ev.n, ev.snd, ev.dur, t0 + ev.beat * spb());
+    for (const c of song.clips) {
+      const a = clipAudio.get(c.id);
+      if (a) playBuffer(clipBuffer(c.id, a), t0 + c.beat * spb(), 0, c.beats * spb());
+    }
+  } finally {
+    ({ ctx, master, buses, noiseBuf, fxNodes, sounding } = live);
+  }
+  return off.startRendering();
+}
+function wavBlob(buf) {
+  const ch = buf.numberOfChannels, n = buf.length, out = new DataView(new ArrayBuffer(44 + n * ch * 2));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); out.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, ch, true);
+  out.setUint32(24, buf.sampleRate, true); out.setUint32(28, buf.sampleRate * ch * 2, true); out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true);
+  str(36, 'data'); out.setUint32(40, n * ch * 2, true);
+  const data = [...Array(ch)].map((_, c) => buf.getChannelData(c));
+  for (let i = 0, o = 44; i < n; i++) for (let c = 0; c < ch; c++, o += 2) {
+    const s = Math.max(-1, Math.min(1, data[c][i]));
+    out.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([out], { type: 'audio/wav' });
+}
+let exported = null; // { file, url }
+async function exportSong() {
+  $('#settings').close();
+  if (!lastUsedBar()) return flash('Nothing to save yet. Keep a part first, then try again.');
+  stopPlay();
+  const d = $('#exportDlg');
+  $('#exportText').textContent = 'Making your audio file…';
+  $('#exportActions').hidden = true;
+  d.showModal();
+  try {
+    const buf = await renderSong();
+    if (exported) URL.revokeObjectURL(exported.url);
+    const name = `bar-by-bar-${song.bpm}bpm.wav`;
+    const file = new File([wavBlob(buf)], name, { type: 'audio/wav' });
+    exported = { file, url: URL.createObjectURL(file) };
+    const secs = Math.round(buf.duration), mb = (file.size / 1048576).toFixed(1);
+    $('#exportText').textContent = `Your song is ready: ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')} long, ${mb} MB. It starts at bar 1 at ${song.bpm} BPM, so it lines up with the bars in FL Studio at the same tempo.`;
+    $('#exportDownload').href = exported.url;
+    $('#exportDownload').download = name;
+    $('#exportShare').hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
+    $('#exportActions').hidden = false;
+  } catch {
+    $('#exportText').textContent = "Sorry, this browser couldn't make the audio file. Try an up-to-date Chrome, Edge, Firefox or Safari.";
+  }
+}
+$('#exportBtn').onclick = exportSong;
+$('#exportShare').onclick = () => navigator.share({ files: [exported.file], title: 'My Bar by Bar song' }).catch(() => {});
 
 // ---------- Dialogs ----------
 function ask(text, yes) {

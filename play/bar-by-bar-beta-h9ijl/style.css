@@ -128,6 +128,7 @@ dialog h2 { margin: 0 0 var(--space-4); }
 .row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--ocean); }
 .row select { padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); border: 1px solid var(--ink-muted); background: var(--surface-raised); }
 dialog .row button, dialog form > .row.end button { padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); background: var(--sky); font-weight: 600; }
+#exportDownload { padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font-weight: 600; text-decoration: none; }
 .stepper { display: flex; align-items: center; gap: var(--space-2); }
 .stepper button { width: 40px; height: 40px; padding: 0 !important; font-size: 20px; }
 .stepper output { min-width: 72px; text-align: center; font-weight: 600; }
