@@ -146,6 +146,17 @@ button.primary { background: var(--forest); border-color: var(--forest); color: 
 .sp .about[open] summary::before { content: "▾"; }
 .sp .about p + p { margin-top: 6px; }
 .sp .credit { font-size: 13px; color: var(--ink-2); }
+.sp.mine { border-style: dashed; }
+.sp.mine .nm { padding-top: 12px; }
+.other { margin-top: 18px; padding: 14px; }
+.other h3 { font-size: 20px; margin-bottom: 6px; }
+.other-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.other-row input { flex: 1 1 200px; min-width: 0; min-height: 48px; font: 17px/1.2 var(--font-body); color: var(--ink); background: var(--paper);
+  border: 2px solid var(--ink); border-radius: var(--r); padding: 8px 12px; }
+.other .log-with { margin-bottom: 6px; }
+.other .segmented { margin-bottom: 8px; }
+.other .segmented small { display: block; font-weight: 400; font-size: 14px; margin-top: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .empty { padding: 24px 16px; text-align: center; color: var(--ink-2); }
 .section-title { font-size: 21px; margin: 18px 0 10px; }
 

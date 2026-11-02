@@ -1,6 +1,6 @@
 // Trail Pal test: walk one trail section with a slider.
 // Two parts: "The Walk" (every stop is read aloud when you reach it) and "Field guide" (browse; nothing plays on its own).
-const VERSION = '0.5';
+const VERSION = '0.6';
 const S = window.SECTION;
 const $ = (q) => document.querySelector(q);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -25,7 +25,8 @@ const state = {
   heard: new Set(), passed: new Set(), open: new Set(), walking: false, focus: null,
   // Planning ahead: 'all' reads every stop (by topic); 'picks' reads only the stops you picked, so nothing else interrupts.
   readMode: store.get('readMode', 'all'), picks: new Set(store.get('picks', [])),
-  seen: store.get('seen', {}), // "I saw it": { id: { t: time, mi: trail mile } }, kept on this device only
+  seen: store.get('seen', {}), // "I saw it": { id: { t: time, mi: trail mile, name? } }, kept on this device only; "my-" ids are typed in by the hiker
+  logApp: store.get('logApp', 'inat'), // where "Log it" goes: iNaturalist (anything living) or eBird (birds)
 };
 
 // ---------- trail helpers ----------
@@ -385,7 +386,8 @@ function syncGuideButtons() {
 }
 const LISTEN = Object.fromEntries((S.listen || []).map((x) => [x.id, x]));
 // One plant or animal card (Nature list and My sightings).
-const speciesById = (id) => (id.startsWith('cm-') ? S.nature.common.find((c) => c.id === id) && { ...S.nature.common.find((c) => c.id === id), aboutFrom: 'written' }
+const speciesById = (id) => (id.startsWith('my-') ? state.seen[id] && { name: state.seen[id].name, sci: '', custom: true }
+  : id.startsWith('cm-') ? S.nature.common.find((c) => c.id === id) && { ...S.nature.common.find((c) => c.id === id), aboutFrom: 'written' }
   : S.nature.species[id.slice(3)]);
 function speciesCard(s, id, line) {
   return `<div class="sp" data-card="${esc(id)}">
@@ -395,11 +397,38 @@ function speciesCard(s, id, line) {
     <div class="sp-actions"><button data-sp="${esc(id)}">${speaking?.id === id ? '■ Stop' : '▶ Listen'}</button><span class="seen-slot">${seenButtons(id)}</span></div>
     <details class="about"><summary>About it</summary><p>${esc(s.about)}</p>${aboutCredit(s)}</details></div>`;
 }
-// "I saw it" (kept on this device) and, once seen, a way to add it to iNaturalist.
+// The citizen-science apps "Log it" can open. Neither lets another app fill anything in, so we copy the name to paste.
+const LOG_APPS = {
+  inat: { name: 'iNaturalist', url: 'https://www.inaturalist.org/observations/upload', what: 'anything living' },
+  ebird: { name: 'eBird', url: 'https://ebird.org/submit', what: 'birds only' },
+};
+// eBird only takes birds, so everything else goes to iNaturalist whatever the hiker chose.
+const logAppFor = (s) => LOG_APPS[state.logApp === 'ebird' && s.group === 'bird' ? 'ebird' : 'inat'];
+// "I saw it" (kept on this device) and, once seen, a way to log it in a citizen-science app.
 function seenButtons(id) {
   const seen = !!state.seen[id];
   return `<button class="seen" data-seen="${esc(id)}" aria-pressed="${seen}">${seen ? '✓ Seen' : 'I saw it'}</button>`
-    + (seen ? `<button class="inat" data-inat="${esc(id)}">Log it in iNaturalist</button>` : '');
+    + (seen ? `<button class="inat" data-log="${esc(id)}">Log it in ${logAppFor(speciesById(id)).name}</button>` : '');
+}
+// Something the hiker saw that isn't in the guide: just their own words, no photo.
+// We can't tell if it's a bird, so a birder (eBird chosen) gets both apps, eBird first.
+function customCard(id, v, line) {
+  const apps = state.logApp === 'ebird' ? ['ebird', 'inat'] : ['inat'];
+  return `<div class="sp mine" data-card="${esc(id)}"><span class="nm">${esc(v.name)}</span>
+    <span class="ct">${esc(line)} · In your own words</span>
+    <div class="sp-actions">${apps.map((k) => `<button data-log="${esc(id)}" data-via="${k}">Log it in ${LOG_APPS[k].name}</button>`).join('')}<button data-unsee="${esc(id)}">Remove</button></div></div>`;
+}
+// "Saw something else?": type it in so the day's list is complete, and pick which app "Log it" opens.
+function otherBox() {
+  return `<form id="otherForm" class="panel other">
+    <h3>Saw something else?</h3>
+    <p class="guide-note">If it isn't in this guide, write what you think it was (even "orange mushroom on a log"). It's added to My sightings on this phone.</p>
+    <div class="other-row"><label class="sr" for="otherName">What did you see?</label>
+      <input id="otherName" maxlength="80" autocomplete="off" placeholder="What did you see?"><button class="primary">Add to my sightings</button></div>
+    <p class="guide-note log-with"><strong>"Log it" opens:</strong></p>
+    <div class="segmented" role="tablist" aria-label="Log it opens">${Object.entries(LOG_APPS).map(([k, a]) =>
+      `<button type="button" role="tab" data-logapp="${k}" aria-selected="${state.logApp === k}">${a.name}<small>${a.what}</small></button>`).join('')}</div>
+    <p class="guide-note">Both are free and run by science groups. Trail Pal can only open them; you add your photo and the name there.</p></form>`;
 }
 const dayName = (t) => { const d = new Date(t), today = new Date(); if (d.toDateString() === today.toDateString()) return 'Today';
   today.setDate(today.getDate() - 1); return d.toDateString() === today.toDateString() ? 'Yesterday' : d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }); };
@@ -411,7 +440,7 @@ let guideKey = '';
 function renderGuide(fromWalk = false) {
   // While walking, only redraw when something you'd see changes.
   const key = [state.guide, state.month, state.group, zoneAt(state.mile).from, rockAt(state.mile).name, state.guide === 'nature' ? '' : state.mile.toFixed(1)].join('|');
-  if (fromWalk && key === guideKey) return;
+  if (fromWalk && (key === guideKey || document.activeElement?.id === 'otherName')) return; // don't wipe what you're typing
   guideKey = key;
   $('#guideTabs').innerHTML = GUIDE.map(([g, l]) => `<button role="tab" data-guide="${g}" aria-selected="${state.guide === g}">${l}</button>`).join('');
   let html = '';
@@ -432,14 +461,17 @@ function renderGuide(fromWalk = false) {
       <h3 class="section-title">Recorded on this stretch</h3>`;
     html += items.length ? `<div class="species">${items.map((s) => card(s, 'sp-' + s.key, `${s.n} record${s.n === 1 ? '' : 's'}`)).join('')}</div>`
       : `<p class="panel empty">Nobody has shared openly licensed records of these here in ${MONTHS[state.month - 1]} yet. Try another month or group.</p>`;
+    html += otherBox();
   } else if (state.guide === 'seen') {
     const list = Object.entries(state.seen).map(([id, v]) => ({ id, ...v, s: speciesById(id) })).filter((x) => x.s).sort((a, b) => b.t - a.t);
-    html += `<p class="guide-note">Everything you've marked "I saw it", newest first. Your sightings stay on this phone; Trail Pal doesn't send them anywhere.
-      To add one to the science record, press "Log it in iNaturalist" (a free citizen-science app).</p>`;
-    if (!list.length) html += `<p class="panel empty">Nothing yet. When you spot a plant or animal from the Nature list, press "I saw it" on its card and it'll be kept here.</p>`;
+    html += `<p class="guide-note">Everything you've marked "I saw it" or written in, newest first. Your sightings stay on this phone; Trail Pal doesn't send them anywhere.
+      To add one to the science record, press "Log it" (it opens a free citizen-science app).</p>`;
+    if (!list.length) html += `<p class="panel empty">Nothing yet. When you spot a plant or animal from the Nature list, press "I saw it" on its card and it'll be kept here. Something that isn't listed? Write it in below.</p>`;
     const days = [...new Set(list.map((x) => dayName(x.t)))];
+    const line = (x) => `Seen ${new Date(x.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} near mile ${x.mi.toFixed(1)}`;
     for (const d of days) html += `<h3 class="section-title">${esc(d)}</h3><div class="species">`
-      + list.filter((x) => dayName(x.t) === d).map((x) => speciesCard(x.s, x.id, `Seen ${new Date(x.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} near mile ${x.mi.toFixed(1)}`)).join('') + '</div>';
+      + list.filter((x) => dayName(x.t) === d).map((x) => (x.s.custom ? customCard(x.id, x, line(x)) : speciesCard(x.s, x.id, line(x)))).join('') + '</div>';
+    html += otherBox();
   } else if (state.guide === 'rocks') {
     const r = rockAt(state.mile);
     state.open.add('rock-here');
@@ -464,6 +496,15 @@ function renderGuide(fromWalk = false) {
   }
   $('#guide').innerHTML = html;
   const m = $('#month'); if (m) m.onchange = (e) => { state.month = +e.target.value; store.set('month', state.month); renderGuide(); };
+  const f = $('#otherForm'); if (f) f.onsubmit = (e) => {
+    e.preventDefault();
+    const name = $('#otherName').value.trim().replace(/\s+/g, ' ');
+    if (!name) return $('#otherName').focus();
+    state.seen['my-' + Date.now()] = { t: Date.now(), mi: state.mile, name }; store.set('seen', state.seen);
+    $('#otherName').value = '';
+    if (state.guide === 'seen') renderGuide();
+    toast(`Added "${name}" to My sightings.`);
+  };
 }
 
 // ---------- switching views ----------
@@ -529,12 +570,22 @@ document.addEventListener('click', (e) => {
     b.closest('.seen-slot').innerHTML = seenButtons(id); // update in place so an open "About it" stays open
     return;
   }
-  if ((b = t('[data-inat]'))) {
-    // iNaturalist has no link that fills in the species, so copy the name for the hiker to paste.
-    const s = speciesById(b.dataset.inat);
-    navigator.clipboard?.writeText(s.sci).catch(() => {});
-    window.open('https://www.inaturalist.org/observations/upload', '_blank', 'noopener');
-    return toast(`Copied "${s.sci}". In iNaturalist, add your photo and paste the name as the species.`);
+  if ((b = t('[data-log]'))) {
+    // Neither app has a link that fills in the species, so copy the name for the hiker to paste.
+    // iNaturalist matches scientific names best; eBird and the hiker's own words use the everyday name.
+    const s = speciesById(b.dataset.log), app = LOG_APPS[b.dataset.via] || logAppFor(s), name = app === LOG_APPS.inat && s.sci ? s.sci : s.name;
+    navigator.clipboard?.writeText(name).catch(() => {});
+    window.open(app.url, '_blank', 'noopener');
+    return toast(`Copied "${name}". In ${app.name}, ${app === LOG_APPS.ebird ? 'start a checklist and paste the name as the bird' : 'add your photo and paste the name as the species'}.`);
+  }
+  if ((b = t('[data-unsee]'))) {
+    delete state.seen[b.dataset.unsee]; store.set('seen', state.seen);
+    return renderGuide();
+  }
+  if ((b = t('[data-logapp]'))) {
+    state.logApp = b.dataset.logapp; store.set('logApp', state.logApp);
+    const y = window.scrollY; renderGuide(); window.scrollTo(0, y); // "Log it" buttons change name; keep your place
+    return;
   }
   if ((b = t('[data-mapto]'))) return showOnMap(S.stories.find((s) => s.id === b.dataset.mapto));
   if ((b = t('[data-pick]'))) {
