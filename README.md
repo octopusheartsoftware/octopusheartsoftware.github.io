@@ -5,7 +5,8 @@ The Octopus Heart Software website, at https://octopusheartsoftware.com (hosted 
 | File | What it is |
 | --- | --- |
 | `index.html` | Home page: intro, values, Apps (CinemAlert, coming soon) and Contact sections. |
-| `privacy.html` | The website's privacy policy. App policies go in their own pages (for example `cinemalert/privacy.html`) before each release. |
+| `privacy.html` | The website's privacy policy. App policies go in their own pages before each release. |
+| `cinemalert/privacy.html` | CinemAlert's privacy policy (the public copy Google Play links to; keep it identical to `apps/cinemalert/www/privacy.html`, added Nov 6, 2026). |
 | `404.html` | Friendly "page not found" page. |
 | `styles.css` | Page layout. Uses only `brand.css` variables. |
 | `brand.css` | A copy of `shared/brand/brand.css`. If the brand kit changes, copy it here again. |
