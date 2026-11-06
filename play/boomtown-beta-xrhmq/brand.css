@@ -1,0 +1,105 @@
+/* Octopus Heart Software brand stylesheet. Generated from tokens.json; edit tokens.json (or the design system) rather than this file. */
+@import url("https://fonts.googleapis.com/css2?family=Lexend:wght@500;600&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400&display=swap");
+
+:root {
+  --surface: #f5f9fc;
+  --surface-raised: #ffffff;
+  --sky: #dcf0fa;
+  --line: #cfdde8;
+  --ink: #0f2a3d;
+  --ink-muted: #4d6475;
+  --ocean: #0b67ad;
+  --on-ocean: #ffffff;
+  --aqua: #1fb5c9;
+  --blush: #f3c6bf;
+  --on-accent: #0f2a3d;
+  --leaf: #2b7a3d;
+  --danger: #b42318;
+  --link: var(--ocean);
+  --focus-ring: var(--ocean);
+  --font-display: "Lexend", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+  --shadow-soft: 0 1px 2px rgba(15, 42, 61, 0.06), 0 6px 20px rgba(15, 42, 61, 0.08);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #0b1924;
+    --surface-raised: #112535;
+    --sky: #15374f;
+    --line: #24414f;
+    --ink: #e5f1f9;
+    --ink-muted: #9cb2c3;
+    --ocean: #5db6ef;
+    --on-ocean: #0b1924;
+    --aqua: #3fd1e1;
+    --blush: #f0aea4;
+    --on-accent: #0b1924;
+    --leaf: #6fcf86;
+    --danger: #ff8a7a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --surface: #0b1924;
+  --surface-raised: #112535;
+  --sky: #15374f;
+  --line: #24414f;
+  --ink: #e5f1f9;
+  --ink-muted: #9cb2c3;
+  --ocean: #5db6ef;
+  --on-ocean: #0b1924;
+  --aqua: #3fd1e1;
+  --blush: #f0aea4;
+  --on-accent: #0b1924;
+  --leaf: #6fcf86;
+  --danger: #ff8a7a;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+h1, h2, h3, .display-xl, .display-l { font-family: var(--font-display); text-wrap: balance; color: var(--ink); }
+a { color: var(--link); }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* The one allowed gradient: a soft sky wash behind a hero or splash screen. */
+.sky-wash { background: linear-gradient(180deg, var(--sky), var(--surface)); }
+
+/* Type styles */
+.display-xl { font-family: var(--font-display); font-size: 48px; line-height: 52px; font-weight: 600; }
+.display-l { font-family: var(--font-display); font-size: 36px; line-height: 42px; font-weight: 600; }
+.heading-1 { font-family: var(--font-display); font-size: 28px; line-height: 34px; font-weight: 600; }
+.heading-2 { font-family: var(--font-display); font-size: 22px; line-height: 28px; font-weight: 500; }
+.heading-3 { font-family: var(--font-display); font-size: 18px; line-height: 24px; font-weight: 500; }
+.body-l { font-family: var(--font-sans); font-size: 18px; line-height: 28px; font-weight: 400; }
+.body { font-family: var(--font-sans); font-size: 16px; line-height: 24px; font-weight: 400; }
+.small { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 400; }
+.label { font-family: var(--font-sans); font-size: 13px; line-height: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.code { font-family: var(--font-mono); font-size: 14px; line-height: 20px; font-weight: 400; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

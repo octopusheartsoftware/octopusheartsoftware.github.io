@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Boomtown (test)</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="brand.css?v=mw4a2cha">
+  <link rel="stylesheet" href="style.css?v=mw4a2cha">
+</head>
+<body>
+  <div id="game">
+    <canvas id="map"></canvas>
+    <div id="badges"></div>
+
+    <header id="top">
+      <div id="clock">12:00</div>
+      <div id="phase" class="chip">Peace</div>
+      <div id="me"></div>
+      <div class="spacer"></div>
+      <button id="btn-turn-l" class="icon-btn turn-btn" title="Turn left (Q)" aria-label="Turn left">&#x27F2;</button>
+      <button id="btn-turn-r" class="icon-btn turn-btn" title="Turn right (E)" aria-label="Turn right">&#x27F3;</button>
+      <button id="btn-options" class="icon-btn" aria-label="Options and pause">II</button>
+    </header>
+
+    <aside id="left" aria-label="Your trucks, defenses and army"></aside>
+    <aside id="right" aria-label="Build"></aside>
+    <footer id="bottom" aria-label="Resources"></footer>
+
+    <div id="hint" hidden></div>
+    <div id="toasts" aria-live="polite"></div>
+    <div id="ghost" hidden></div>
+    <div id="popover" hidden></div>
+  </div>
+
+  <!-- Start screen -->
+  <section id="start" class="screen">
+    <div class="card">
+      <h1>Boomtown</h1>
+      <p class="sub">Test build v0.1 &middot; you against computer cities</p>
+      <ul class="how">
+        <li><b>Biggest population after 12 minutes wins.</b> Build Housing, then build it taller.</li>
+        <li><b>Housing needs all four resources,</b> and you're only rich in two. Drag a <b>truck</b> to a player to fetch theirs, or to the <b>Countryside</b> sign (slower). If they send one back, it's a <b>trade route</b> and trucks run much faster.</li>
+        <li><b>Drag soldiers, tanks or bombers onto a player</b> to send them all. Any attack cuts trade between you two for a while. No attacks in the first 2 minutes.</li>
+        <li>Put <b>turrets</b> on the side your enemies sit. Your own defenders always fight back.</li>
+      </ul>
+      <div class="field">
+        <span class="label">Players</span>
+        <div class="seg" id="seg-players">
+          <button data-v="3">3</button><button data-v="4" class="on">4</button><button data-v="5">5</button><button data-v="6">6</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">City view</span>
+        <div class="seg" id="seg-turn">
+          <button data-v="still" class="on">Stays still</button><button data-v="turn">Turns with phone</button>
+        </div>
+      </div>
+      <p class="note" id="turn-note">With "Turns with phone", the map turns to match the room as you turn. On a computer, use Q and E (or the arrow buttons) to pretend.</p>
+      <button id="btn-start" class="primary">Start a game</button>
+      <p class="note" style="margin:10px 0 0">Test build v0.1. <button type="button" id="btn-feedback2" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+    </div>
+  </section>
+
+  <!-- Options / pause -->
+  <section id="options" class="screen" hidden>
+    <div class="card">
+      <h2>Paused</h2>
+      <div class="field">
+        <span class="label">City view</span>
+        <div class="seg" id="seg-turn2">
+          <button data-v="still">Stays still</button><button data-v="turn">Turns with phone</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">Test speed</span>
+        <div class="seg" id="seg-speed">
+          <button data-v="1" class="on">Normal</button><button data-v="2">2x</button><button data-v="4">4x</button>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button id="btn-resume" class="primary">Keep playing</button>
+        <button id="btn-quit">New game</button>
+      </div>
+      <p class="note" style="margin-top:12px">Test build v0.1. Nothing leaves your device. <button type="button" id="btn-feedback" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+    </div>
+  </section>
+
+  <!-- End -->
+  <section id="end" class="screen" hidden>
+    <div class="card">
+      <h2 id="end-title">Time's up!</h2>
+      <ol id="end-list"></ol>
+      <p class="note" id="end-note"></p>
+      <button id="btn-again" class="primary">Play again</button>
+    </div>
+  </section>
+
+  <div id="rotate">Turn your phone sideways to play.</div>
+
+  <script src="oh-feedback.js?v=mw4a2cha"></script>
+  <script src="config.js?v=mw4a2cha"></script>
+  <script src="sim.js?v=mw4a2cha"></script>
+  <script src="ai.js?v=mw4a2cha"></script>
+  <script src="view.js?v=mw4a2cha"></script>
+</body>
+</html>
