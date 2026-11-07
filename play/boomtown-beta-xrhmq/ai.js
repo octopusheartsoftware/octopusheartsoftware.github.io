@@ -151,7 +151,7 @@
       const g = this.g, p = this.p;
       let from = Object.keys(threats).sort((a, b) => threats[b] - threats[a])[0];
       if (from == null) { const others = g.players.filter((q) => q !== p); from = others[(Math.random() * others.length) | 0].id; }
-      const ang = p.dir[from] + rand(-0.5, 0.5), r = rand(45, 55);
+      const ang = p.dir[from] + rand(-0.5, 0.5), r = rand(C.turretZone[0] + 2, C.turretZone[1] - 2);
       return g.placeTurret(p, type, Math.sin(ang) * r, -Math.cos(ang) * r);
     }
 

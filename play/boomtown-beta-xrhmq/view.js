@@ -97,7 +97,7 @@
   $('#btn-quit').onclick = () => { $('#options').hidden = true; $('#start').hidden = false; };
   const feedback = () => {
     const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}, screen ${innerWidth}x${innerHeight}` : 'start screen';
-    OHFeedback.open({ app: 'Boomtown', version: '0.3', where });
+    OHFeedback.open({ app: 'Boomtown', version: '0.4', where });
   };
   $('#btn-feedback').onclick = feedback;
   $('#btn-feedback2').onclick = feedback;
@@ -148,10 +148,10 @@
   ];
   const UNITS = LEFT.concat(RIGHT);
   const BUILD = [
-    { key: 'housing', name: 'Housing', tip: 'Room for 60 more people. Tap it later to build it taller' },
+    { key: 'housing', name: 'Housing', tip: 'Room for 60 more people' },
     { key: 'workshop', name: 'Workshop', tip: 'Workers gather 25% faster' },
-    { key: 'depot', name: 'Depot', tip: 'Faster trucks, and room for 2 more' },
-    { key: 'barracks', name: 'Barracks', tip: '2 more defenders, and they recover faster' },
+    { key: 'depot', name: 'Depot', tip: 'Faster trucks, 2 more trucks' },
+    { key: 'barracks', name: 'Barracks', tip: '2 more defenders, quicker back' },
   ];
   const UNIT_WORDS = { truck: ['truck', 'trucks'], inf: ['infantry', 'infantry'], tank: ['tank', 'tanks'], bomb: ['bomber', 'bombers'] };
 
@@ -191,7 +191,7 @@
     for (const it of UNITS) {
       const row = document.querySelector(`[data-key="${it.key}"]`);
       let c;
-      if (it.key === 'truck') { const busy = me.trucks.length - g.idleTrucks(me).length; c = `${g.idleTrucks(me).length}<small> +${busy} out</small>`; }
+      if (it.key === 'truck') { const busy = me.trucks.length - g.idleTrucks(me).length; c = `${g.idleTrucks(me).length}${busy ? `<small> +${busy} out</small>` : ''}`; }
       else if (it.place) c = me.turrets.filter((t) => t.type === it.key).length;
       else c = me.army[it.key];
       row.querySelector('[data-count]').innerHTML = c;
@@ -394,22 +394,42 @@
       if (!r.ok) return toast(r.msg, 'bad');
       setMode(null); return;
     }
-    const lot = nearestLot(w);
-    if (lot >= 0) return me.buildings[lot] ? buildingPopover(e, lot) : buildPopover(e, lot);
+    // Press on the city: the block under your finger lights up and follows it; let go to open its menu (#158).
+    pick = { lot: nearestLot(w), id: e.pointerId };
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
   });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!g) return;
+    const lot = nearestLot(unproject(e.clientX, e.clientY));
+    if (pick && pick.id === e.pointerId) pick.lot = lot;
+    else if (e.pointerType === 'mouse' && !e.buttons) hoverLot = lot; // a mouse shows the block before you click
+  });
+  canvas.addEventListener('pointerleave', () => { hoverLot = -1; });
+  const endPick = (e, cancel) => {
+    if (!pick || pick.id !== e.pointerId) return;
+    const lot = pick.lot; pick = null;
+    if (cancel || lot < 0 || !g || paused) return;
+    me.buildings[lot] ? buildingPopover(lot) : buildPopover(lot);
+  };
+  canvas.addEventListener('pointerup', (e) => endPick(e, false));
+  canvas.addEventListener('pointercancel', (e) => endPick(e, true));
+  let pick = null, hoverLot = -1, selLot = -1;
+  const litLot = () => (pick ? pick.lot : selLot >= 0 ? selLot : hoverLot);
+  function lotAnchor(lot) { const L = BT.LOTS[lot], q = proj(L.x, L.y); return { clientX: q.x, clientY: q.y, lot }; }
   function nearestLot(w) {
     let best = -1, bd = 6.5;
     BT.LOTS.forEach((L, i) => { const d = Math.max(Math.abs(L.x - w.x), Math.abs(L.y - (w.y - 2))); if (d < bd) { bd = d; best = i; } });
     return best;
   }
-  function buildPopover(e, lot) {
-    openPopover(e, `<h3>Empty lot</h3>`, BUILD.map((b) => {
+  function buildPopover(lot) {
+    const e = lotAnchor(lot);
+    openPopover(e, `<h3>Build here</h3>`, BUILD.map((b) => {
       const cost = g.costOf(me, b.key);
       return [`<span class="bi">${ICONS[b.key]}</span><span><b>${b.name}</b> ${costHTML(cost, me)}<br><small>${b.tip}</small></span>`, () => res(g.build(me, b.key, lot)), !g.canAfford(me, cost)];
     }));
   }
-  function buildingPopover(e, lot) {
-    const b = me.buildings[lot];
+  function buildingPopover(lot) {
+    const e = lotAnchor(lot), b = me.buildings[lot];
     const names = { housing: 'Housing', workshop: 'Workshop', depot: 'Depot', barracks: 'Barracks' };
     if (b.rubble) {
       const cost = g.rebuildCost(me, lot);
@@ -436,15 +456,22 @@
 
   function openPopover(e, html, actions, keep) {
     const p = $('#popover');
-    p.innerHTML = html + `<div class="acts">${actions.map((a, i) => `<button data-i="${i}" ${a[2] ? 'disabled' : ''}>${a[0]}</button>`).join('')}<button class="quiet" data-close>Close</button></div>`;
+    p.classList.toggle('grid', actions.length >= 3);
+    p.innerHTML = `<button class="x" data-close aria-label="Close">&times;</button>` + html + (actions.length ? `<div class="acts">${actions.map((a, i) => `<button data-i="${i}" ${a[2] ? 'disabled' : ''}>${a[0]}</button>`).join('')}</div>` : '');
     p.hidden = false;
-    const x = Math.min(window.innerWidth - p.offsetWidth - 8, Math.max(8, e.clientX - p.offsetWidth / 2));
-    const y = Math.min(window.innerHeight - p.offsetHeight - 8, Math.max(44, e.clientY - 30));
+    selLot = e.lot != null ? e.lot : -1;
+    const W2 = window.innerWidth, top = $('#top').offsetHeight + 4, bottom = window.innerHeight - $('#bottom').offsetHeight - 4;
+    const pw = p.offsetWidth, ph = p.offsetHeight;
+    // beside the block you picked (on the side with more room), so it stays in view where possible
+    let x = e.lot != null ? (e.clientX < W2 / 2 ? e.clientX + 40 : e.clientX - 40 - pw) : e.clientX - pw / 2;
+    x = Math.min(W2 - pw - 6, Math.max(6, x));
+    let y = Math.min(bottom - ph, Math.max(top, e.lot != null ? e.clientY - ph / 2 : e.clientY + 16));
+    if (y < 4) y = 4;
     p.style.left = x + 'px'; p.style.top = y + 'px';
     p.querySelectorAll('[data-i]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); if (!keep) closePopover(); actions[+b.dataset.i][1](); });
     p.querySelector('[data-close]').onclick = closePopover;
   }
-  function closePopover() { $('#popover').hidden = true; }
+  function closePopover() { $('#popover').hidden = true; selLot = -1; }
 
   // ---------- toasts and events ----------
   function toast(text, kind = '', secs = 3.2) {
@@ -495,7 +522,8 @@
     view.badgeRect = { x: lw, y: th, w: W - lw - rw, h: H - th - bh };
     view.rect = view.badgeRect;
     view.cx = W / 2; view.cy = th + (H - th - bh) / 2 + 4;
-    view.S = Math.min((W - lw - rw) / (2 * 58), (H - th - bh) / (2 * 56 * TILT));
+    // sized so the city fills the space; the turret ring's outer edge may tuck under the bars
+    view.S = Math.min((W - lw - rw) / (2 * 56), (H - th - bh) / (2 * 50 * TILT));
   }
   window.addEventListener('resize', () => { resize(); if (g) updateBadges(); });
 
@@ -513,12 +541,13 @@
 
   // Decoration: fields, workers, trees, cars and people on the pavements (none of it changes the rules).
   const STREETS = [-32.5, -19.5, -6.5, 6.5, 19.5, 32.5];
-  const CITY_R = 41;
+  const CITY_H = 34.5, CITY_CORNER = 9; // half the width of the square city (#159), and how round its corners are
+  const PARKS = [[-26, -26], [26, -26], [-26, 26], [26, 26]]; // the corner blocks are little parks, not lots
   function seeded(seed) { let x = seed; return () => { x = (x * 16807) % 2147483647; return (x - 1) / 2147483646; }; }
-  function streetSpan(v) { return Math.sqrt(Math.max(0, CITY_R * CITY_R - v * v)); }
+  function streetSpan(v) { return CITY_H - 1.7; }
   function makeDecor(p) {
     const rnd = seeded(12345 + Math.floor(Math.random() * 1000));
-    const fields = p.rich.map((r, i) => ({ r, ang: p.homeDir + (i ? -0.9 : 0.9), dist: 52 })); // close enough to always be on screen
+    const fields = p.rich.map((r, i) => ({ r, ang: p.homeDir + (i ? -0.9 : 0.9), dist: 55 })); // close enough to always be on screen
     const workers = [];
     fields.forEach((f, i) => { for (let k = 0; k < 3; k++) workers.push({ f: i, ph: rnd(), sp: 0.035 + rnd() * 0.02 }); });
     const trees = [];
@@ -526,6 +555,7 @@
       const a = rnd() * Math.PI * 2, r = 46 + rnd() * 90;
       const x = Math.sin(a) * r, y = -Math.cos(a) * r;
       if (Math.abs(x - 6.5) < 6 || Math.abs(y - 6.5) < 6) continue; // keep the highways clear
+      if (Math.max(Math.abs(x), Math.abs(y)) < CITY_H + 4) continue; // and the city
       if (fields.some((f) => { const d = BT.dirVec(f.ang); return Math.hypot(x - d.x * f.dist, y - d.y * f.dist) < 16; })) continue;
       trees.push({ x, y, s: 0.8 + rnd() * 0.6, tone: rnd() });
     }
@@ -546,6 +576,26 @@
     ctx.beginPath();
     for (let i = 0; i <= 64; i++) { const a = (i / 64) * Math.PI * 2; const q = proj(Math.sin(a) * r, -Math.cos(a) * r); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }
     ctx.strokeStyle = style; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function fillSquare(h, rc, style, ox = 0, oy = 0) {
+    // a rounded square on the ground, drawn through the tilted view
+    ctx.beginPath(); let first = true;
+    for (const [cx, cy, a0] of [[h - rc, -h + rc, -Math.PI / 2], [h - rc, h - rc, 0], [-h + rc, h - rc, Math.PI / 2], [-h + rc, -h + rc, Math.PI]]) {
+      for (let i = 0; i <= 6; i++) {
+        const a = a0 + (i / 6) * (Math.PI / 2);
+        const q = proj(ox + cx + Math.cos(a) * rc, oy + cy + Math.sin(a) * rc);
+        first ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y); first = false;
+      }
+    }
+    ctx.closePath(); ctx.fillStyle = style; ctx.fill();
+  }
+  function lotOutline(lot, k, style, width, fill) {
+    const L = BT.LOTS[lot], h = 5.2 * k;
+    ctx.beginPath();
+    [[-h, -h], [h, -h], [h, h], [-h, h]].forEach(([dx, dy], i) => { const q = proj(L.x + dx, L.y + dy); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    ctx.strokeStyle = style; ctx.lineWidth = width; ctx.lineJoin = 'round'; ctx.stroke();
   }
   function fillRing(r, style) {
     ctx.beginPath();
@@ -572,7 +622,8 @@
     }
     for (const f of g.decor.fields) drawField(f, now);
     // the city: pavement, then streets on the grid
-    fillRing(CITY_R + 2, '#8f8a7c'); fillRing(CITY_R, PAL.plaza);
+    fillSquare(CITY_H + 1.5, CITY_CORNER + 1.5, '#8f8a7c'); fillSquare(CITY_H, CITY_CORNER, PAL.plaza);
+    for (const [px, py] of PARKS) fillSquare(4.8, 1.5, '#6fae4f', px, py);
     for (const v of STREETS) {
       const sp = streetSpan(v);
       line(v, -sp, v, sp, PAL.road, 3.4 * S); line(-sp, v, sp, v, PAL.road, 3.4 * S);
@@ -588,6 +639,15 @@
     const items = [];
     me.buildings.forEach((b, i) => items.push({ y: BT.LOTS[i].y, x: BT.LOTS[i].x, f: () => drawBuilding(b, i, now) }));
     items.push({ x: 0, y: 0, f: () => drawHall(now) });
+    for (const [px, py] of PARKS) for (const [dx, dy, sc] of [[-2, -1.5, 0.8], [2, 1.5, 0.95]]) items.push({ x: px + dx, y: py + dy, f: () => drawTree({ x: px + dx, y: py + dy, s: sc, tone: 0.4 }) });
+    const lit = litLot();
+    if (lit >= 0) {
+      // the picked block: a yellow outline that grows a little and pulses, drawn under and again over the building
+      const k = 1.12 + Math.sin(now / 160) * 0.05;
+      lotOutline(lit, k, 'rgba(255,211,77,.95)', Math.max(2, view.S * 0.45), 'rgba(255,211,77,.28)');
+      const L = BT.LOTS[lit];
+      items.push({ x: L.x, y: L.y + 0.01, f: () => lotOutline(lit, k, 'rgba(255,211,77,.95)', Math.max(2, view.S * 0.45)) });
+    }
     for (const f of g.decor.fields) { const d = BT.dirVec(f.ang); items.push({ x: d.x * f.dist, y: d.y * f.dist, f: () => drawFieldSign(f) }); }
     for (const t of g.decor.trees) items.push({ x: t.x, y: t.y, f: () => drawTree(t) });
     for (const t of me.turrets) items.push({ x: t.x, y: t.y, f: () => drawTurret(t) });
