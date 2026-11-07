@@ -72,7 +72,7 @@
   $('#btn-quit').onclick = () => { $('#options').hidden = true; $('#start').hidden = false; };
   const feedback = () => {
     const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}` : 'start screen';
-    OHFeedback.open({ app: 'Boomtown', version: '0.1', where });
+    OHFeedback.open({ app: 'Boomtown', version: '0.2', where });
   };
   $('#btn-feedback').onclick = feedback;
   $('#btn-feedback2').onclick = feedback;
@@ -109,92 +109,72 @@
     workshop: '<svg viewBox="0 0 28 28"><path d="M3 24V12l6 4v-4l6 4v-4l6 4V6h4v18z" fill="#b08d57"/><circle cx="12" cy="20" r="3" fill="none" stroke="#5d4a2a" stroke-width="2"/></svg>',
     depot: '<svg viewBox="0 0 28 28"><path d="M3 24V11l11-6 11 6v13z" fill="#7d8f9e"/><rect x="7" y="14" width="14" height="10" fill="#4a5864"/><path d="M7 17h14M7 20h14" stroke="#7d8f9e"/></svg>',
     barracks: '<svg viewBox="0 0 28 28"><rect x="3" y="12" width="22" height="12" fill="#6e7a4c"/><rect x="3" y="10" width="22" height="3" fill="#525c38"/><path d="M14 10V2" stroke="#333" stroke-width="1.5"/><path d="M14 2h8l-2 2.5 2 2.5h-8z" fill="#2f7fd8"/></svg>',
-    up: '<svg viewBox="0 0 28 28"><path d="M14 3l9 10h-5v11h-8V13H5z" fill="#ffd34d"/></svg>',
   };
+  // Left: trucks and defenses. Right: the army. (Michael's layout, Nov 7, 2026.)
   const LEFT = [
     { key: 'truck', name: 'Trucks', send: 'truck', buy: 'truck' },
     { key: 'ag', name: 'Ground turret', buy: 'ag', place: true },
     { key: 'aa', name: 'Air turret', buy: 'aa', place: true },
+  ];
+  const RIGHT = [
     { key: 'inf', name: 'Infantry', send: 'inf', buy: 'inf' },
     { key: 'tank', name: 'Tanks', send: 'tank', buy: 'tank' },
     { key: 'bomb', name: 'Bombers', send: 'bomb', buy: 'bomb' },
   ];
+  const UNITS = LEFT.concat(RIGHT);
   const BUILD = [
-    { key: 'housing', name: 'Housing', tip: '+60 people. Tap one later to build it taller.' },
+    { key: 'housing', name: 'Housing', tip: 'Room for 60 more people. Tap it later to build it taller' },
     { key: 'workshop', name: 'Workshop', tip: 'Workers gather 25% faster' },
-    { key: 'depot', name: 'Depot', tip: 'Faster trucks, +2 truck spaces' },
-    { key: 'barracks', name: 'Barracks', tip: '+2 defenders, they recover faster' },
+    { key: 'depot', name: 'Depot', tip: 'Faster trucks, and room for 2 more' },
+    { key: 'barracks', name: 'Barracks', tip: '2 more defenders, and they recover faster' },
   ];
+  const UNIT_WORDS = { truck: ['truck', 'trucks'], inf: ['infantry', 'infantry'], tank: ['tank', 'tanks'], bomb: ['bomber', 'bombers'] };
 
   function costHTML(cost, p) {
     if (!cost) return '';
     return RES.filter((r) => cost[r]).map((r) => `<span class="${p && p.stock[r] < cost[r] ? 'short' : ''}"><i style="background:${RCOL[r]}"></i>${cost[r]}</span>`).join('');
   }
 
-  function buildPanels() {
-    const L = $('#left');
-    L.innerHTML = '<div class="title">Send &amp; defend</div>' + LEFT.map((it) => `
-      <div class="row" data-key="${it.key}" ${it.send ? `data-send="${it.send}"` : ''}>
+  function rowHTML(it) {
+    return `<div class="row" data-key="${it.key}" ${it.send ? `data-send="${it.send}"` : ''}>
         <div class="ico">${ICONS[it.key]}</div>
-        <div><div class="count" data-count>0</div><div class="name">${it.name}</div></div>
+        <div class="count" data-count>0</div>
         <button class="plus" data-buy="${it.buy}" aria-label="Buy ${it.name}">+</button>
+        <div class="name">${it.name}</div>
         <div class="cost" data-cost></div>
-      </div>`).join('');
-    const R = $('#right');
-    R.innerHTML = '<div class="title">Build</div>' + BUILD.map((it) => `
-      <div class="row build" data-build="${it.key}" title="${it.tip}">
-        <div class="ico">${ICONS[it.key]}</div>
-        <div><div class="name" style="font-weight:600;opacity:1">${it.name} <small data-n></small></div><div class="cost" data-cost></div></div>
-      </div>`).join('') + `
-      <div class="row build" data-upgrades>
-        <div class="ico">${ICONS.up}</div>
-        <div><div class="name" style="font-weight:600;opacity:1">Upgrades</div><div class="cost" data-cost style="opacity:.7">Health, damage</div></div>
       </div>`;
-    const B = $('#bottom');
-    B.innerHTML = RES.map((r) => `<div class="res ${me.rich.includes(r) ? 'rich' : ''}" data-res="${r}"><div class="dot" style="background:${RCOL[r]}"></div><div><div class="v">0</div><div class="r">${C.resourceNames[r]}</div></div></div>`).join('');
+  }
 
-    // buying
-    L.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', (e) => {
+  function buildPanels() {
+    $('#left').innerHTML = LEFT.map(rowHTML).join('');
+    $('#right').innerHTML = RIGHT.map(rowHTML).join('');
+    $('#bottom').innerHTML = RES.map((r) => `<div class="res ${me.rich.includes(r) ? 'rich' : ''}" data-res="${r}"><div class="dot" style="background:${RCOL[r]}"></div><div><div class="v">0</div><div class="r">${C.resourceNames[r]}</div></div></div>`).join('');
+
+    document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation();
       const item = b.dataset.buy;
       if (item === 'ag' || item === 'aa') {
         if (!g.canAfford(me, g.costOf(me, item))) return toast('Not enough ' + g.missing(me, g.costOf(me, item)).map((r) => C.resourceNames[r]).join(' and '), 'bad');
-        return setMode({ kind: 'place', item });
+        return setMode(mode && mode.item === item ? null : { kind: 'place', item });
       }
       const r = g.buy(me, item); if (!r.ok) toast(r.msg, 'bad');
     }));
-    L.querySelectorAll('[data-send]').forEach((row) => row.addEventListener('pointerdown', (e) => { if (!e.target.closest('.plus')) startDrag(e, row.dataset.send); }));
-    R.querySelectorAll('[data-build]').forEach((row) => row.addEventListener('click', () => {
-      const item = row.dataset.build;
-      if (mode && mode.kind === 'build' && mode.item === item) return setMode(null);
-      if (!me.buildings.includes(null)) return toast('No empty lots left. Tap a Housing block to build it taller.', 'bad');
-      if (!g.canAfford(me, g.costOf(me, item))) return toast('Not enough ' + g.missing(me, g.costOf(me, item)).map((r) => C.resourceNames[r]).join(' and '), 'bad');
-      setMode({ kind: 'build', item });
-    }));
-    R.querySelector('[data-upgrades]').addEventListener('click', (e) => openUpgrades(e));
+    document.querySelectorAll('[data-send]').forEach((row) => row.addEventListener('pointerdown', (e) => { if (!e.target.closest('.plus')) startDrag(e, row.dataset.send); }));
   }
 
   function updatePanels() {
-    for (const it of LEFT) {
-      const row = document.querySelector(`#left [data-key="${it.key}"]`);
+    for (const it of UNITS) {
+      const row = document.querySelector(`[data-key="${it.key}"]`);
       let c;
-      if (it.key === 'truck') { const busy = me.trucks.length - g.idleTrucks(me).length; c = `${g.idleTrucks(me).length}<small> + ${busy} out</small>`; }
+      if (it.key === 'truck') { const busy = me.trucks.length - g.idleTrucks(me).length; c = `${g.idleTrucks(me).length}<small> +${busy} out</small>`; }
       else if (it.place) c = me.turrets.filter((t) => t.type === it.key).length;
       else c = me.army[it.key];
       row.querySelector('[data-count]').innerHTML = c;
       const cost = g.costOf(me, it.buy);
-      row.querySelector('[data-cost]').innerHTML = costHTML(cost, me) + (it.key === 'inf' ? '<span style="opacity:.7">for 5</span>' : '');
+      row.querySelector('[data-cost]').innerHTML = costHTML(cost, me) + (it.key === 'inf' ? '<span style="opacity:.7">x5</span>' : '');
       row.querySelector('.plus').classList.toggle('no', !g.canAfford(me, cost));
-      row.classList.toggle('selected', !!(mode && ((mode.kind === 'send' && mode.item === it.send) || (mode.kind === 'place' && mode.item === it.key))));
-    }
-    for (const it of BUILD) {
-      const row = document.querySelector(`#right [data-build="${it.key}"]`);
-      const cost = g.costOf(me, it.key);
-      row.querySelector('[data-cost]').innerHTML = costHTML(cost, me);
-      const n = g.count(me, it.key);
-      row.querySelector('[data-n]').textContent = n ? `(${n})` : '';
-      row.classList.toggle('no', !g.canAfford(me, cost));
-      row.classList.toggle('armed', !!(mode && mode.kind === 'build' && mode.item === it.key));
+      row.classList.toggle('selected', !!(mode && mode.kind === 'place' && mode.item === it.key));
+      row.classList.toggle('dragging', !!(drag && drag.moved && drag.item === it.send));
     }
     const boost = (1 + C.workshopBoost * g.count(me, 'workshop')) * (g.finalPush ? C.finalIncomeBoost : 1);
     for (const r of RES) {
@@ -202,7 +182,6 @@
       el.querySelector('.v').textContent = Math.floor(me.stock[r]);
       el.querySelector('.r').textContent = C.resourceNames[r] + (me.rich.includes(r) ? ` +${(C.richRate * boost).toFixed(1)}/s` : ' (trade)');
     }
-    // top bar
     const tl = g.timeLeft, m = Math.floor(tl / 60), s = Math.floor(tl % 60);
     $('#clock').textContent = `${m}:${String(s).padStart(2, '0')}`;
     $('#clock').classList.toggle('final', g.finalPush);
@@ -211,74 +190,86 @@
     else if (g.finalPush) { ph.className = 'chip final'; ph.textContent = 'Final push!'; }
     else { ph.className = 'chip'; ph.textContent = 'Open war'; }
     const rk = g.rankOf(me);
-    $('#me').innerHTML = `<b>${ordinal(rk)}</b> &middot; ${Math.floor(me.pop)} people <span style="opacity:.6">/ room for ${g.popCap(me)}</span>`;
+    $('#me').innerHTML = `<b>${ordinal(rk)}</b> &middot; ${Math.floor(me.pop)} people <span class="cap">/ room for ${g.popCap(me)}</span>`;
     updateBadges();
   }
   const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][n] || 'th');
 
-  // ---------- badges (other players round the edge, in their real direction) ----------
+  // ---------- player circles: small at the edge, growing when you drag something onto them ----------
   function buildBadges() {
     const wrap = $('#badges');
     wrap.innerHTML = '';
-    for (const q of g.players) {
-      if (q === me) continue;
+    const make = (pid, color, label, inner) => {
       const el = document.createElement('div');
-      el.className = 'badge'; el.dataset.pid = q.id;
-      el.innerHTML = `<svg class="ring" viewBox="0 0 66 66"><circle cx="33" cy="33" r="30" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="5"/><circle class="cd" cx="33" cy="33" r="30" fill="none" stroke="#ff7a6a" stroke-width="5" stroke-dasharray="188.5" stroke-dashoffset="188.5"/></svg>
-        <div class="disc" style="background:${q.color}"><span class="rk">1</span><sup class="sx">st</sup></div>
-        <div class="lbl"><b>${q.name}</b><br><span class="tr"></span></div>`;
-      el.querySelector('.disc').addEventListener('click', (e) => onBadgeTap(e, q));
+      el.className = 'badge' + (pid === 'home' ? ' home' : ''); el.dataset.pid = pid;
+      el.innerHTML = `<div class="disc" style="background:${color}">
+          <svg class="ring" viewBox="0 0 40 40"><circle class="cd" cx="20" cy="20" r="18" fill="none" stroke="#ff7a6a" stroke-width="4" stroke-dasharray="113.1" stroke-dashoffset="113.1"/></svg>
+          <span class="rk">${inner}</span>
+          <div class="drop"><b>${label}</b><span class="what"></span><span class="info"></span></div>
+        </div><div class="lbl">${label}</div>`;
+      el.querySelector('.disc').addEventListener('click', (e) => onBadgeTap(e, pid === 'home' ? 'home' : g.players[pid]));
       wrap.appendChild(el);
-    }
-    const home = document.createElement('div');
-    home.className = 'badge home'; home.dataset.pid = 'home';
-    home.innerHTML = `<div class="disc" title="Countryside">&#x2691;</div><div class="lbl"><b>Countryside</b><br><span class="tr"></span></div>`;
-    home.querySelector('.disc').addEventListener('click', (e) => onBadgeTap(e, 'home'));
-    wrap.appendChild(home);
+    };
+    for (const q of g.players) if (q !== me) make(q.id, q.color, q.name, '1');
+    make('home', '#6b5a3a', 'Countryside', '&#x2691;');
   }
 
   function badgePos(ang) {
     const a = ang - viewAngle;
     const dx = Math.sin(a), dy = -Math.cos(a) * TILT;
-    const r = view.rect, inset = 40;
-    const hx = (r.w / 2 - inset), hy = (r.h / 2 - inset - 10);
+    const r = view.badgeRect, inset = 22;
+    const hx = r.w / 2 - inset, hy = r.h / 2 - inset;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     const t = Math.min(Math.abs(dx) > 1e-6 ? hx / Math.abs(dx) : 1e9, Math.abs(dy) > 1e-6 ? hy / Math.abs(dy) : 1e9);
-    return { x: view.cx + dx * t, y: view.cy + dy * t };
+    return { x: cx + dx * t, y: cy + dy * t };
   }
 
   function updateBadges() {
+    const dragging = drag && drag.moved;
     for (const el of document.querySelectorAll('.badge')) {
-      const pid = el.dataset.pid;
-      if (pid === 'home') {
-        const pos = badgePos(me.homeDir);
-        el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px';
-        const n = g.trucksTo(me, 'home');
-        el.querySelector('.tr').textContent = n ? `${n} truck${n > 1 ? 's' : ''} out` : 'slow trucks';
-        el.classList.toggle('target', !!(mode && mode.kind === 'send' && mode.item === 'truck') || dragOver === 'home');
-        continue;
-      }
-      const q = g.players[+pid];
-      const pos = badgePos(me.dir[q.id]);
+      const pid = el.dataset.pid, home = pid === 'home';
+      const q = home ? null : g.players[+pid];
+      const pos = badgePos(home ? me.homeDir : me.dir[q.id]);
       el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px';
+      const over = dragging && dragOver === (home ? 'home' : q.id);
+      // the countryside circle only matters while you're dragging a truck
+      el.classList.toggle('hidden', home && !(dragging && drag.item === 'truck') && g.trucksTo(me, 'home') === 0);
+      el.classList.toggle('dim', !!(dragging && home && drag.item !== 'truck'));
+      el.classList.toggle('big', !!over);
+      // a grown circle stays fully on screen: it opens toward the middle
+      const disc = el.querySelector('.disc');
+      if (over) {
+        const R = 48, br = view.badgeRect;
+        const cx = Math.min(br.x + br.w - R - 4, Math.max(br.x + R + 4, pos.x)), cy = Math.min(br.y + br.h - R - 4, Math.max(br.y + R + 4, pos.y));
+        disc.style.left = (cx - pos.x - R) + 'px'; disc.style.top = (cy - pos.y - R) + 'px';
+      } else { disc.style.left = ''; disc.style.top = ''; }
+      el.classList.toggle('flip', pos.y > view.badgeRect.y + view.badgeRect.h / 2);
+      if (over) {
+        const n = drag.item === 'truck' ? 1 : me.army[drag.item];
+        const w = UNIT_WORDS[drag.item][n === 1 ? 0 : 1];
+        el.querySelector('.what').textContent = `Drop ${n} ${w}`;
+        let info = '';
+        if (!home) {
+          const cd = g.cooldownLeft(me, q);
+          if (drag.item === 'truck') info = cd > 0 ? `Trade cut ${Math.ceil(cd)}s` : g.trucksTo(q, me.id) > 0 ? 'Makes a trade route!' : `${q.rich.map((r) => C.resourceNames[r]).join(' + ')}`;
+          else info = g.peace ? 'Peace time' : (g.trucksTo(me, q.id) || g.trucksTo(q, me.id)) ? 'Cuts your trade' : `${ordinal(g.rankOf(q))} place`;
+        } else info = 'Slow, what you lack';
+        el.querySelector('.info').textContent = info;
+      }
+      if (home) continue;
       const rk = g.rankOf(q);
-      el.querySelector('.rk').textContent = rk; el.querySelector('.sx').textContent = ordinal(rk).slice(String(rk).length);
+      el.querySelector('.rk').textContent = rk;
       const cd = g.cooldownLeft(me, q);
-      el.querySelector('.cd').setAttribute('stroke-dashoffset', String(188.5 * (1 - cd / C.convoy.cooldown)));
-      const mine = g.trucksTo(me, q.id), theirs = g.trucksTo(q, me.id);
-      const route = mine > 0 && theirs > 0;
-      el.classList.toggle('route', route);
-      let txt = cd > 0 ? `trade cut ${Math.ceil(cd)}s` : route ? `trade route ${mine}&#x21C4;${theirs}` : (mine || theirs) ? `trucks: you ${mine}, them ${theirs}` : '';
-      el.querySelector('.tr').innerHTML = txt;
-      el.classList.toggle('target', !!(mode && mode.kind === 'send') || dragOver === q.id);
+      el.querySelector('.cd').setAttribute('stroke-dashoffset', String(113.1 * (1 - cd / C.convoy.cooldown)));
+      el.classList.toggle('route', g.tradeRoute(me, q));
     }
   }
 
   function onBadgeTap(e, q) {
     e.stopPropagation();
-    if (mode && mode.kind === 'send') { const it = mode.item; setMode(null); return sendTo(it, q); }
     if (q === 'home') {
-      return openPopover(e, `<h3>Countryside</h3><p>Trucks sent here bring back what you lack, but slowly. Another player is faster, and a trade route (trucks both ways) is fastest.</p>`,
-        [['Send a truck', () => sendTo('truck', 'home'), !g.idleTrucks(me).length], ['Bring a truck home', () => res(g.recallTruck(me, 'home')), !g.trucksTo(me, 'home')]]);
+      return openPopover(e, `<h3>Countryside</h3><p>Trucks dragged here bring back what you lack, but slowly. Another player is faster, and a trade route (trucks both ways) is fastest.</p>`,
+        [['Bring a truck home', () => res(g.recallTruck(me, 'home')), !g.trucksTo(me, 'home')]]);
     }
     const mine = g.trucksTo(me, q.id), theirs = g.trucksTo(q, me.id), cd = g.cooldownLeft(me, q);
     const brain = brains.find((b) => b.p === q);
@@ -286,9 +277,8 @@
       <p>Rich in ${q.rich.map((r) => `<b style="color:${RCOL[r]}">${C.resourceNames[r]}</b>`).join(' and ')}.</p>
       <p>Your trucks to them: ${mine}. Theirs to you: ${theirs}.${mine && theirs ? ' <b>Trade route:</b> trucks run fast both ways.' : ''}</p>
       ${cd > 0 ? `<p style="color:#ff9d8f">Trade is cut for ${Math.ceil(cd)} more seconds.</p>` : ''}
-      <p style="opacity:.65">In the real game you'd just ask ${q.name} out loud.</p>`,
-      [['Send a truck', () => sendTo('truck', q), !g.idleTrucks(me).length || cd > 0],
-       [`Ask ${q.name} for a truck`, () => { const r = brain.askedForTruck(me); toast(r.say, r.yes ? 'good' : ''); }, false],
+      <p style="opacity:.65">To send something, drag it from the side onto this circle. In the real game you'd ask ${q.name} out loud for a truck.</p>`,
+      [[`Ask ${q.name} for a truck`, () => { const r = brain.askedForTruck(me); toast(r.say, r.yes ? 'good' : ''); }, false],
        ['Bring a truck home', () => res(g.recallTruck(me, q.id)), !mine]]);
   }
   const res = (r) => { if (!r.ok) toast(r.msg, 'bad'); };
@@ -300,69 +290,67 @@
       if (q !== 'home') toast(g.trucksTo(q, me.id) > 0 ? `Trade route with ${q.name}! Trucks run fast both ways.` : `Truck on its way to ${q.name}. Ask them to send one back for a trade route.`, g.trucksTo(q, me.id) > 0 ? 'good' : '');
       return;
     }
-    if (q === 'home') return toast('Soldiers can only be sent to players.', 'bad');
+    if (q === 'home') return;
     const had = g.trucksTo(me, q.id) + g.trucksTo(q, me.id);
     const r = g.sendArmy(me, item, q.id);
     if (!r.ok) return toast(r.msg, 'bad');
-    const nm = { inf: 'infantry', tank: r.n > 1 ? 'tanks' : 'tank', bomb: r.n > 1 ? 'bombers' : 'bomber' }[item];
-    toast(`${r.n} ${nm} on their way to ${q.name}.${had ? ' Trade with them is cut.' : ''}`);
+    toast(`${r.n} ${UNIT_WORDS[item][r.n === 1 ? 0 : 1]} on their way to ${q.name}.${had ? ' Trade with them is cut.' : ''}`);
   }
 
-  // ---------- drag to send ----------
+  // ---------- drag to send (the only way to send; let go anywhere else to cancel) ----------
   let drag = null, dragOver = null;
   function startDrag(e, item) {
     e.preventDefault();
-    drag = { item, x0: e.clientX, y0: e.clientY, moved: false, id: e.pointerId };
-    const label = { truck: 'Truck', inf: 'Infantry', tank: 'Tanks', bomb: 'Bombers' }[item];
-    const gh = $('#ghost'); gh.textContent = label; gh.hidden = true;
+    drag = { item, x0: e.clientX, y0: e.clientY, moved: false };
+    const n = item === 'truck' ? g.idleTrucks(me).length : me.army[item];
+    const gh = $('#ghost');
+    gh.innerHTML = `<span class="gi">${ICONS[item]}</span>${item === 'truck' ? '1 truck' : `${n} ${UNIT_WORDS[item][n === 1 ? 0 : 1]}`}`;
+    gh.hidden = true;
+    drag.empty = n === 0;
   }
   window.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 10) { drag.moved = true; $('#ghost').hidden = false; }
+    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8) {
+      drag.moved = true; closePopover();
+      if (drag.empty) { toast(drag.item === 'truck' ? 'No free trucks. Buy one with +, or bring one home.' : 'None to send yet. Buy some with +.', 'bad'); drag = null; return; }
+      $('#ghost').hidden = false; document.body.classList.add('dragging');
+    }
     if (!drag.moved) return;
     const gh = $('#ghost'); gh.style.left = e.clientX + 'px'; gh.style.top = e.clientY + 'px';
-    dragOver = dropTarget(e.clientX, e.clientY, drag.item);
+    dragOver = dropTarget(e.clientX, e.clientY);
+    gh.style.visibility = dragOver != null ? 'hidden' : 'visible'; // the open circle shows it instead
+    updateBadges();
   });
-  window.addEventListener('pointerup', (e) => {
+  const endDrag = (e, cancel) => {
     if (!drag) return;
-    const d = drag; drag = null; $('#ghost').hidden = true;
-    const target = d.moved ? dropTarget(e.clientX, e.clientY, d.item) : null; dragOver = null;
-    if (!d.moved) { // a tap: pick it, then tap a player
-      if (mode && mode.kind === 'send' && mode.item === d.item) return setMode(null);
-      return setMode({ kind: 'send', item: d.item });
-    }
-    if (target == null) return toast(d.item === 'truck' ? 'Drop it on a player, or on the Countryside sign.' : 'Drop them on a player.', '');
+    const target = !cancel && drag.moved ? dropTarget(e.clientX, e.clientY) : null;
+    const d = drag; drag = null; dragOver = null; $('#ghost').hidden = true; $('#ghost').style.visibility = ''; document.body.classList.remove('dragging');
+    if (!d.moved) { toast(d.item === 'truck' ? 'Drag a truck onto a player, or onto the Countryside.' : 'Drag them onto a player to send them.'); return; }
+    if (target == null) { updateBadges(); return; } // let go on no player: cancelled
     sendTo(d.item, target === 'home' ? 'home' : g.players[target]);
-  });
-  // nearest badge to the finger, or the countryside if it's out toward an empty edge
-  function dropTarget(x, y, item) {
-    let best = null, bd = 80;
+    updateBadges();
+  };
+  window.addEventListener('pointerup', (e) => endDrag(e, false));
+  window.addEventListener('pointercancel', (e) => endDrag(e, true));
+
+  // the circle under the finger (generous, so it's easy to hit)
+  function dropTarget(x, y) {
+    let best = null, bd = 56;
     for (const el of document.querySelectorAll('.badge')) {
+      if (el.classList.contains('hidden') && !(drag && drag.item === 'truck')) continue;
+      if (el.dataset.pid === 'home' && !(drag && drag.item === 'truck')) continue;
       const bx = parseFloat(el.style.left), by = parseFloat(el.style.top);
       const d = Math.hypot(bx - x, by - y);
       if (d < bd) { bd = d; best = el.dataset.pid === 'home' ? 'home' : +el.dataset.pid; }
     }
-    if (best == null && item === 'truck') {
-      const r = view.rect;
-      const nx = (x - view.cx) / (r.w / 2), ny = (y - view.cy) / (r.h / 2);
-      if (Math.hypot(nx, ny) > 0.85 || x < r.x || x > r.x + r.w) {
-        // toward a player? then not home
-        const a = Math.atan2(x - view.cx, -(y - view.cy) / TILT) + viewAngle;
-        const near = g.players.some((q) => q !== me && Math.abs(angDiff(me.dir[q.id], a)) < 0.45);
-        if (!near) best = 'home';
-      }
-    }
     return best;
   }
-  const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
   // ---------- modes and tapping the city ----------
   function setMode(m) {
     mode = m; closePopover();
     if (!m) return setHint(null);
-    if (m.kind === 'place') setHint(`Tap the ring around your city to place the ${m.item === 'ag' ? 'ground' : 'air'} turret. Face it toward your enemies.`);
-    if (m.kind === 'build') setHint(`Tap an empty lot to build ${m.item === 'housing' ? 'Housing' : 'a ' + m.item[0].toUpperCase() + m.item.slice(1)}.`);
-    if (m.kind === 'send') setHint(m.item === 'truck' ? 'Now tap a player, or the Countryside sign.' : 'Now tap the player to send them to.');
+    if (m.kind === 'place') setHint(`Tap the grass round your city to place the ${m.item === 'ag' ? 'ground' : 'air'} turret, on the side your enemies sit.`);
   }
   function setHint(text) {
     const h = $('#hint');
@@ -381,21 +369,19 @@
       if (!r.ok) return toast(r.msg, 'bad');
       setMode(null); return;
     }
-    if (mode && mode.kind === 'build') {
-      const lot = nearestLot(w, (b) => b === null);
-      if (lot < 0) return toast('Tap one of the empty lots (dashed squares).', 'bad');
-      const r = g.build(me, mode.item, lot); if (!r.ok) toast(r.msg, 'bad');
-      setMode(null); return;
-    }
-    if (mode) { setMode(null); return; }
-    // tap a building
-    const lot = nearestLot(w, (b) => b !== null);
-    if (lot >= 0) return buildingPopover(e, lot);
+    const lot = nearestLot(w);
+    if (lot >= 0) return me.buildings[lot] ? buildingPopover(e, lot) : buildPopover(e, lot);
   });
-  function nearestLot(w, ok) {
-    let best = -1, bd = 9;
-    me.buildings.forEach((b, i) => { if (!ok(b)) return; const d = Math.hypot(BT.LOTS[i].x - w.x, BT.LOTS[i].y - (w.y - 3)); if (d < bd) { bd = d; best = i; } });
+  function nearestLot(w) {
+    let best = -1, bd = 6.5;
+    BT.LOTS.forEach((L, i) => { const d = Math.max(Math.abs(L.x - w.x), Math.abs(L.y - (w.y - 2))); if (d < bd) { bd = d; best = i; } });
     return best;
+  }
+  function buildPopover(e, lot) {
+    openPopover(e, `<h3>Empty lot</h3>`, BUILD.map((b) => {
+      const cost = g.costOf(me, b.key);
+      return [`<span class="bi">${ICONS[b.key]}</span><span><b>${b.name}</b> ${costHTML(cost, me)}<br><small>${b.tip}</small></span>`, () => res(g.build(me, b.key, lot)), !g.canAfford(me, cost)];
+    }));
   }
   function buildingPopover(e, lot) {
     const b = me.buildings[lot];
@@ -421,13 +407,14 @@
     });
     openPopover(e, `<h3>Upgrades</h3><p>Each tier adds 25%. Unit upgrades help your defenders too.</p>`, rows, true);
   }
+  $('#btn-up').onclick = (e) => { if (g) openUpgrades(e); };
 
   function openPopover(e, html, actions, keep) {
     const p = $('#popover');
     p.innerHTML = html + `<div class="acts">${actions.map((a, i) => `<button data-i="${i}" ${a[2] ? 'disabled' : ''}>${a[0]}</button>`).join('')}<button class="quiet" data-close>Close</button></div>`;
     p.hidden = false;
-    const x = Math.min(window.innerWidth - 240, Math.max(10, e.clientX - 115));
-    const y = Math.min(window.innerHeight - p.offsetHeight - 10, Math.max(46, e.clientY - 40));
+    const x = Math.min(window.innerWidth - p.offsetWidth - 8, Math.max(8, e.clientX - p.offsetWidth / 2));
+    const y = Math.min(window.innerHeight - p.offsetHeight - 8, Math.max(44, e.clientY - 30));
     p.style.left = x + 'px'; p.style.top = y + 'px';
     p.querySelectorAll('[data-i]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); if (!keep) closePopover(); actions[+b.dataset.i][1](); });
     p.querySelector('[data-close]').onclick = closePopover;
@@ -479,11 +466,13 @@
     W = window.innerWidth; H = window.innerHeight;
     canvas.width = W * DPR; canvas.height = H * DPR;
     const lw = $('#left').offsetWidth, rw = $('#right').offsetWidth, th = 40, bh = 52;
-    view.rect = { x: lw, y: th, w: W - lw - rw, h: H - th - bh };
-    view.cx = view.rect.x + view.rect.w / 2; view.cy = view.rect.y + view.rect.h / 2 + 6;
-    view.S = Math.min(view.rect.w / (2 * 82), view.rect.h / (2 * 82 * TILT));
+    // the map fills the whole screen; the side panels float over it
+    view.badgeRect = { x: lw, y: th, w: W - lw - rw, h: H - th - bh };
+    view.rect = view.badgeRect;
+    view.cx = W / 2; view.cy = th + (H - th - bh) / 2 + 4;
+    view.S = Math.min((W - lw - rw) / (2 * 58), (H - th - bh) / (2 * 56 * TILT));
   }
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', () => { resize(); if (g) updateBadges(); });
 
   function proj(x, y, h = 0) {
     const c = Math.cos(viewAngle), s = Math.sin(viewAngle);
@@ -497,12 +486,35 @@
   }
   function screenAngle(worldAng) { const a = worldAng - viewAngle; return Math.atan2(-Math.cos(a) * TILT, Math.sin(a)); }
 
-  // fields and workers (decoration)
+  // Decoration: fields, workers, trees, cars and people on the pavements (none of it changes the rules).
+  const STREETS = [-32.5, -19.5, -6.5, 6.5, 19.5, 32.5];
+  const CITY_R = 41;
+  function seeded(seed) { let x = seed; return () => { x = (x * 16807) % 2147483647; return (x - 1) / 2147483646; }; }
+  function streetSpan(v) { return Math.sqrt(Math.max(0, CITY_R * CITY_R - v * v)); }
   function makeDecor(p) {
-    const fields = p.rich.map((r, i) => ({ r, ang: p.homeDir + (i ? -0.75 : 0.75), dist: 60 }));
+    const rnd = seeded(12345 + Math.floor(Math.random() * 1000));
+    const fields = p.rich.map((r, i) => ({ r, ang: p.homeDir + (i ? -0.8 : 0.8), dist: 64 }));
     const workers = [];
-    fields.forEach((f, i) => { for (let k = 0; k < 3; k++) workers.push({ f: i, ph: Math.random(), sp: 0.04 + Math.random() * 0.02 }); });
-    return { fields, workers };
+    fields.forEach((f, i) => { for (let k = 0; k < 3; k++) workers.push({ f: i, ph: rnd(), sp: 0.035 + rnd() * 0.02 }); });
+    const trees = [];
+    for (let k = 0; k < 140; k++) {
+      const a = rnd() * Math.PI * 2, r = 46 + rnd() * 90;
+      const x = Math.sin(a) * r, y = -Math.cos(a) * r;
+      if (Math.abs(x - 6.5) < 6 || Math.abs(y - 6.5) < 6) continue; // keep the highways clear
+      if (fields.some((f) => { const d = BT.dirVec(f.ang); return Math.hypot(x - d.x * f.dist, y - d.y * f.dist) < 18; })) continue;
+      trees.push({ x, y, s: 0.8 + rnd() * 0.6, tone: rnd() });
+    }
+    const cars = [];
+    for (let k = 0; k < 7; k++) cars.push({ axis: rnd() < 0.5 ? 'x' : 'y', line: STREETS[(rnd() * STREETS.length) | 0], t: rnd(), sp: (0.04 + rnd() * 0.03) * (rnd() < 0.5 ? 1 : -1), col: ['#c0392b', '#e8e2d0', '#2c3e50', '#d4a017', '#5d8aa8', '#7a7a7a', '#3b7a57'][k] });
+    const walkers = [];
+    for (let k = 0; k < 40; k++) walkers.push({ axis: rnd() < 0.5 ? 'x' : 'y', line: STREETS[(rnd() * STREETS.length) | 0] + (rnd() < 0.5 ? -2.6 : 2.6), t: rnd(), sp: (0.008 + rnd() * 0.008) * (rnd() < 0.5 ? 1 : -1), col: ['#c0392b', '#2f7fd8', '#e0a83a', '#6c3483', '#2fa65a', '#e8e2d0', '#555'][k % 7] });
+    return { fields, workers, trees, cars, walkers };
+  }
+  function onStreet(o, now, speed) {
+    const span = streetSpan(o.line);
+    const t = ((o.t + (now / 1000) * o.sp * speed) % 1 + 1) % 1;
+    const along = -span + t * 2 * span;
+    return o.axis === 'x' ? { x: o.line, y: along, dir: o.sp > 0 ? Math.PI : 0 } : { x: along, y: o.line, dir: o.sp > 0 ? Math.PI / 2 : -Math.PI / 2 };
   }
 
   function ellipseRing(r, style, width, dash) {
@@ -510,49 +522,88 @@
     for (let i = 0; i <= 64; i++) { const a = (i / 64) * Math.PI * 2; const q = proj(Math.sin(a) * r, -Math.cos(a) * r); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }
     ctx.strokeStyle = style; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
   }
-  function roadTo(ang, from, to) {
-    const d = BT.dirVec(ang); const a = proj(d.x * from, d.y * from), b = proj(d.x * to, d.y * to);
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = PAL.road; ctx.lineWidth = 6 * view.S * 0.6; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    ctx.strokeStyle = PAL.roadLine; ctx.lineWidth = 1; ctx.setLineDash([5, 6]); ctx.stroke(); ctx.setLineDash([]);
+  function fillRing(r, style) {
+    ctx.beginPath();
+    for (let i = 0; i <= 72; i++) { const a = (i / 72) * Math.PI * 2; const q = proj(Math.sin(a) * r, -Math.cos(a) * r); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }
+    ctx.fillStyle = style; ctx.fill();
+  }
+  function line(x1, y1, x2, y2, style, width, dash) {
+    const a = proj(x1, y1), b = proj(x2, y2);
+    ctx.strokeStyle = style; ctx.lineWidth = width; ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
   }
 
   function draw(now) {
     const S = view.S;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.fillStyle = PAL.sea; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = PAL.grass; ctx.fillRect(0, 0, W, H);
     if (!g) return;
-    // ground
-    ctx.beginPath();
-    for (let i = 0; i <= 64; i++) { const a = (i / 64) * Math.PI * 2; const q = proj(Math.sin(a) * 135, -Math.cos(a) * 135); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }
-    ctx.fillStyle = PAL.grass; ctx.fill();
-    ctx.beginPath();
-    for (let i = 0; i <= 64; i++) { const a = (i / 64) * Math.PI * 2; const q = proj(Math.sin(a) * 37, -Math.cos(a) * 37); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }
-    ctx.fillStyle = PAL.plaza; ctx.fill();
-    // roads toward each player and the countryside
-    for (const q of g.players) if (q !== me) roadTo(me.dir[q.id], 38, 140);
-    roadTo(me.homeDir, 38, 140);
-    ellipseRing(38, PAL.road, 5 * S * 0.6);
-    // fields
+    // soft patches in the grass
+    fillRing(140, PAL.grass2); fillRing(110, PAL.grass);
+    // highways out of town
+    ctx.lineCap = 'butt';
+    for (const [x1, y1, x2, y2] of [[6.5, -160, 6.5, 160], [-160, 6.5, 160, 6.5]]) {
+      line(x1, y1, x2, y2, PAL.road, 5 * S); line(x1, y1, x2, y2, PAL.roadLine, Math.max(1, S * 0.3), [S * 2, S * 2]);
+    }
     for (const f of g.decor.fields) drawField(f, now);
-    if (mode && mode.kind === 'place') { ellipseRing(C.turretZone[0], 'rgba(255,211,77,.9)', 2, [6, 5]); ellipseRing(C.turretZone[1], 'rgba(255,211,77,.9)', 2, [6, 5]); }
+    // the city: pavement, then streets on the grid
+    fillRing(CITY_R + 2, '#8f8a7c'); fillRing(CITY_R, PAL.plaza);
+    for (const v of STREETS) {
+      const sp = streetSpan(v);
+      line(v, -sp, v, sp, PAL.road, 3.4 * S); line(-sp, v, sp, v, PAL.road, 3.4 * S);
+    }
+    for (const v of STREETS) {
+      const sp = streetSpan(v);
+      line(v, -sp, v, sp, 'rgba(230,220,170,.55)', Math.max(1, S * 0.18), [S * 1.5, S * 1.5]);
+      line(-sp, v, sp, v, 'rgba(230,220,170,.55)', Math.max(1, S * 0.18), [S * 1.5, S * 1.5]);
+    }
+    if (mode && mode.kind === 'place') { ellipseRing(C.turretZone[0], 'rgba(255,211,77,.95)', 2, [6, 5]); ellipseRing(C.turretZone[1], 'rgba(255,211,77,.95)', 2, [6, 5]); }
 
-    // things standing on the ground, back to front
+    // everything standing up, back to front
     const items = [];
     me.buildings.forEach((b, i) => items.push({ y: BT.LOTS[i].y, x: BT.LOTS[i].x, f: () => drawBuilding(b, i, now) }));
     items.push({ x: 0, y: 0, f: () => drawHall(now) });
+    for (const t of g.decor.trees) items.push({ x: t.x, y: t.y, f: () => drawTree(t) });
     for (const t of me.turrets) items.push({ x: t.x, y: t.y, f: () => drawTurret(t) });
     for (const d of me.defenders) items.push({ x: d.x, y: d.y, f: () => drawSoldier(d, me.color, true, now) });
     for (const v of me.invaders) if (v.kind !== 'bomb') items.push({ x: v.x, y: v.y, f: () => v.kind === 'inf' ? drawSoldier(v, g.players[v.from].color, false, now) : drawTank(v, g.players[v.from].color) });
     for (const t of me.trucks) if (t.dest !== null) { const pos = truckPos(t); if (pos) items.push({ x: pos.x, y: pos.y, f: () => drawTruck(pos, t) }); }
     for (const w of g.decor.workers) { const pos = workerPos(w, now); items.push({ x: pos.x, y: pos.y, f: () => drawWorker(pos, now) }); }
+    const calm = me.invaders.length === 0;
+    for (const c of g.decor.cars) { const pos = onStreet(c, now, calm ? 1 : 0.2); pos.x += c.axis === 'x' ? (c.sp > 0 ? 0.9 : -0.9) : 0; pos.y += c.axis === 'y' ? (c.sp > 0 ? -0.9 : 0.9) : 0; items.push({ x: pos.x, y: pos.y, f: () => drawCar(pos, c.col) }); }
+    const people = Math.min(g.decor.walkers.length, Math.round(me.pop / 22));
+    for (let k = 0; k < people; k++) { const w = g.decor.walkers[k]; const pos = onStreet(w, now, calm ? 1 : 3); items.push({ x: pos.x, y: pos.y, f: () => drawWalker(pos, w, now) }); }
     const c = Math.cos(viewAngle), s = Math.sin(viewAngle);
     items.sort((a, b) => (a.y * c - a.x * s) - (b.y * c - b.x * s));
     for (const it of items) it.f();
-    // bombers in the air
     for (const v of me.invaders) if (v.kind === 'bomb') drawBomber(v, g.players[v.from].color);
-    // effects
     for (const f of me.fx) drawFx(f);
+  }
+
+  function drawTree(t) {
+    const S = view.S * t.s, p = proj(t.x, t.y);
+    shadow({ x: p.x + 2 * S, y: p.y + 0.5 * S }, 2.6 * S, 1.2 * S);
+    ctx.fillStyle = '#5b4a33'; ctx.fillRect(p.x - 0.35 * S, p.y - 2.2 * S, 0.7 * S, 2.2 * S);
+    const g1 = t.tone < 0.5 ? '#3f6e35' : '#4c7d3a', g2 = t.tone < 0.5 ? '#558a43' : '#62994a';
+    ctx.fillStyle = g1; ctx.beginPath(); ctx.arc(p.x, p.y - 3.4 * S, 2.2 * S, 0, 7); ctx.fill();
+    ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(p.x - 0.6 * S, p.y - 4.1 * S, 1.4 * S, 0, 7); ctx.fill();
+  }
+  function drawCar(pos, col) {
+    const S = view.S, p = proj(pos.x, pos.y);
+    const a = screenAngle(pos.dir);
+    ctx.save(); ctx.translate(p.x, p.y - 0.6 * S); ctx.rotate(a);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-1.5 * S, -0.6 * S, 3.2 * S, 1.5 * S);
+    ctx.fillStyle = col; ctx.fillRect(-1.6 * S, -0.75 * S, 3.2 * S, 1.5 * S);
+    ctx.fillStyle = 'rgba(40,60,80,.85)'; ctx.fillRect(0.2 * S, -0.6 * S, 0.9 * S, 1.2 * S);
+    ctx.restore();
+  }
+  function drawWalker(pos, w, now) {
+    const S = view.S * 0.55, p = proj(pos.x, pos.y);
+    const step = Math.sin(now / 160 + w.t * 50) * 0.4 * S;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = Math.max(1, 0.45 * S);
+    ctx.beginPath(); ctx.moveTo(p.x - 0.3 * S, p.y - 1.4 * S); ctx.lineTo(p.x - 0.3 * S - step, p.y); ctx.moveTo(p.x + 0.3 * S, p.y - 1.4 * S); ctx.lineTo(p.x + 0.3 * S + step, p.y); ctx.stroke();
+    ctx.fillStyle = w.col; ctx.fillRect(p.x - 0.7 * S, p.y - 3.2 * S, 1.4 * S, 1.9 * S);
+    ctx.fillStyle = PAL.skin; ctx.beginPath(); ctx.arc(p.x, p.y - 3.8 * S, 0.65 * S, 0, 7); ctx.fill();
   }
 
   function drawField(f, now) {
@@ -584,12 +635,21 @@
   }
 
   function box(p, w, h, front, top, outline) {
-    const S = view.S, d = w * 0.55;
-    const x = p.x - (w * S) / 2, y = p.y - h * S * 0.75;
-    ctx.fillStyle = top; ctx.fillRect(x, y - d * S * TILT, w * S, d * S * TILT);
-    ctx.fillStyle = front; ctx.fillRect(x, y, w * S, h * S * 0.75);
-    if (outline) { ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.strokeRect(x, y - d * S * TILT, w * S, h * S * 0.75 + d * S * TILT); }
-    return { x, y, w: w * S, h: h * S * 0.75, topH: d * S * TILT };
+    // a block seen from slightly above and to the left: front, a sloped roof and a shaded right side
+    const S = view.S, d = w * 0.55, k = w * 0.28 * S;
+    const x = p.x - (w * S) / 2, y = p.y - h * S * 0.75, fw = w * S, fh = h * S * 0.75, th = d * S * TILT;
+    ctx.fillStyle = shadeCol(front, 0.72);
+    ctx.beginPath(); ctx.moveTo(x + fw, y); ctx.lineTo(x + fw + k, y - th); ctx.lineTo(x + fw + k, y + fh - th); ctx.lineTo(x + fw, y + fh); ctx.fill();
+    ctx.fillStyle = top;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + fw, y); ctx.lineTo(x + fw + k, y - th); ctx.lineTo(x + k, y - th); ctx.fill();
+    ctx.fillStyle = front; ctx.fillRect(x, y, fw, fh);
+    if (outline) { ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, fw, fh); }
+    return { x, y, w: fw, h: fh, topH: th, k };
+  }
+  function shadeCol(hex, f) {
+    if (hex[0] !== '#') return hex;
+    const n = parseInt(hex.slice(1), 16);
+    return `rgb(${((n >> 16) & 255) * f | 0},${((n >> 8) & 255) * f | 0},${(n & 255) * f | 0})`;
   }
   function shadow(p, rx, ry) { ctx.fillStyle = PAL.shadow; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7); ctx.fill(); }
   function hpBar(p, frac, w) {
@@ -722,13 +782,17 @@
   }
 
   function truckPos(t) {
-    // out along the road for the first half of the trip, back for the second; hidden while far away
+    // trucks leave town along the highway that points most nearly their way, then drive out of sight
     const ang = t.dest === 'home' ? me.homeDir : me.dir[t.dest];
-    const f = t.p < 0.5 ? t.p * 2 : (1 - t.p) * 2; // 0 at home, 1 at the far end
-    const r = 40 + f * 260;
-    if (r > 128) return null;
-    const d = BT.dirVec(ang), side = t.p < 0.5 ? 2 : -2; // drive on the right
-    return { x: d.x * r - d.y * side, y: d.y * r + d.x * side, ang: t.p < 0.5 ? ang : ang + Math.PI, loaded: t.p >= 0.5 };
+    const ax = [[0, -1], [1, 0], [0, 1], [-1, 0]][Math.round(((ang % (2 * Math.PI)) + 2 * Math.PI) / (Math.PI / 2)) % 4];
+    const f = t.p < 0.5 ? t.p * 2 : (1 - t.p) * 2;
+    const r = 8 + f * 360;
+    if (r > 150) return null;
+    const lane = t.p < 0.5 ? 1.1 : -1.1;
+    const x = ax[0] ? ax[0] * r : 6.5 + lane * (ax[1] > 0 ? -1 : 1);
+    const y = ax[1] ? ax[1] * r : 6.5 + lane * (ax[0] > 0 ? 1 : -1);
+    const out = Math.atan2(ax[0], -ax[1]);
+    return { x, y, ang: t.p < 0.5 ? out : out + Math.PI, loaded: t.p >= 0.5 };
   }
   function drawTruck(pos, t) {
     const S = view.S, p = proj(pos.x, pos.y);

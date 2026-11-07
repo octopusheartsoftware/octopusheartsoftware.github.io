@@ -8,10 +8,13 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
 
-  // Building lots: the town hall in the middle, 6 lots round it, 8 further out.
+  // Building lots: city blocks on a street grid round the town hall, nearest first.
   const LOTS = [];
-  for (let i = 0; i < 6; i++) { const a = (i * 60 + 30) * Math.PI / 180; LOTS.push({ x: Math.sin(a) * 15, y: -Math.cos(a) * 15 }); }
-  for (let i = 0; i < 8; i++) { const a = (i * 45) * Math.PI / 180; LOTS.push({ x: Math.sin(a) * 28, y: -Math.cos(a) * 28 }); }
+  for (let gx = -2; gx <= 2; gx++) for (let gy = -2; gy <= 2; gy++) {
+    const x = gx * 13, y = gy * 13;
+    if ((gx || gy) && Math.hypot(x, y) <= 34) LOTS.push({ x, y });
+  }
+  LOTS.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
   BT.LOTS = LOTS;
   BT.HALL = { x: 0, y: 0 };
 

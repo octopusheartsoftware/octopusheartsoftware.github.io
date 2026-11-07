@@ -82,7 +82,7 @@
       ag: { hp: 80, range: 32, dps: 9 },   // shoots infantry and tanks
       aa: { hp: 60, range: 38, dps: 12 },  // shoots bombers
     },
-    turretZone: [40, 98],   // turrets go on this ring around the city
+    turretZone: [42, 56],   // turrets go on this ring around the city
     defenders: { base: 4, perBarracks: 2, hp: 12, speed: 9, range: 12, vsInf: 4, vsTank: 1.2, respawn: 8, barracksBoost: 0.2, alertRadius: 62 },
     buildingHp: 100,
     repairRate: 2,          // buildings mend this many points a second when no attackers are in town
