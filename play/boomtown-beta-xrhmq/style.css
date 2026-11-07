@@ -1,3 +1,5 @@
+/* anything marked hidden stays hidden, whatever other rules say */
+[hidden] { display: none !important; }
 /* Boomtown test build. Menus use the brand kit; the game world has its own colors (in view.js). */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1c2b22; color: var(--ink); font-family: var(--font-sans); -webkit-user-select: none; user-select: none; touch-action: none; }
@@ -45,13 +47,14 @@ body.turning .turn-btn { display: inline-block; }
 .row.build.no { opacity: .55; }
 .row.build.armed { border-color: #ffd34d; }
 .cost span { white-space: nowrap; margin-right: 5px; }
-.cost i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; vertical-align: 0; }
+.ricon { display: inline-block; vertical-align: -2px; flex: none; }
+.cost .ricon { margin-right: 2px; }
 .cost span.short { color: #ff9d8f; }
 
 #bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; display: flex; justify-content: center; gap: 8px; padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); }
 .res { display: flex; align-items: center; gap: 8px; padding: 2px 12px; border-radius: 10px; background: rgba(255,255,255,.06); min-width: 128px; transition: background .3s; }
 .res.rich { background: rgba(255,255,255,.14); }
-.res .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.res .ricon { vertical-align: middle; }
 .res .v { font-family: var(--font-display); font-size: 18px; font-weight: 600; }
 .res .r { font-size: 11px; opacity: .75; line-height: 1.1; }
 .res.flash { background: rgba(111, 207, 134, .45); }
@@ -152,3 +155,41 @@ body.hinting #toasts { bottom: 100px; }
 #left .row .cost, #right .row .cost { grid-column: 1 / 4; grid-row: 3; }
 #ghost[hidden] { display: none; }
 .toast { font-size: 12.5px; padding: 4px 10px; opacity: .92; }
+
+/* Short screens (a phone held sideways in a browser): thinner bars and one-line unit rows, so nothing scrolls */
+@media (max-height: 430px) {
+  #top { height: 32px; gap: 8px; }
+  #clock { font-size: 17px; min-width: 50px; }
+  .chip, .chip-btn { font-size: 12px; padding: 2px 9px; }
+  .icon-btn { height: 26px; width: 30px; }
+  #left, #right { top: 32px; bottom: 40px; width: 100px; padding: 4px; gap: 4px; }
+  #left { width: calc(100px + env(safe-area-inset-left)); }
+  #right { width: calc(100px + env(safe-area-inset-right)); }
+  #left .row, #right .row { padding: 2px 4px; grid-template-rows: auto auto; row-gap: 0; }
+  #left .row .name, #right .row .name { display: none; }
+  #left .row .cost, #right .row .cost { grid-row: 2; }
+  #left .row .count, #right .row .count { font-size: 14px; }
+  #left .row .plus, #right .row .plus { height: 20px; }
+  #left .row .ico, #right .row .ico { height: 18px; }
+  .toast { font-size: 12.5px; padding: 4px 10px; }
+  #bottom { height: 40px; padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); gap: 6px; }
+  .res { min-width: 92px; padding: 1px 8px; gap: 6px; }
+  .res .v { font-size: 15px; }
+  .res .r { font-size: 10px; }
+  .res .ricon { width: 16px; height: 16px; }
+  #hint { bottom: 44px; font-size: 12px; line-height: 1.25; padding: 3px 4px 3px 12px; width: max-content; max-width: calc(100vw - 216px); border-radius: 14px; }
+  #hint button { padding: 3px 8px; font-size: 12px; }
+  #toasts { bottom: 46px; }
+  body.hinting #toasts { bottom: 80px; }
+  .card { padding: 12px 16px; }
+  .card h1 { font-size: 24px; }
+  .how { font-size: 13px; margin: 4px 0 6px; }
+  /* start screen: players and Start first, the how-to underneath to scroll if wanted */
+  #start .card { display: flex; flex-direction: column; }
+  #start .card h1 { order: 1; margin: 0; }
+  #start .card .sub { order: 2; margin: 0 0 6px; }
+  #start .card .field { order: 3; margin: 0 0 6px; }
+  #start .card .row-btns { order: 4; }
+  #start .card .how { order: 5; margin-top: 10px; }
+  #start .card .note { order: 6; }
+}

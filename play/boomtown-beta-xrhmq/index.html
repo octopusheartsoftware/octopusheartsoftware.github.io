@@ -6,8 +6,8 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Boomtown (test)</title>
   <link rel="icon" href="favicon.svg">
-  <link rel="stylesheet" href="brand.css?v=mw6kxk8m">
-  <link rel="stylesheet" href="style.css?v=mw6kxk8m">
+  <link rel="stylesheet" href="brand.css?v=mw6lqqt8">
+  <link rel="stylesheet" href="style.css?v=mw6lqqt8">
 </head>
 <body>
   <div id="game">
@@ -39,7 +39,7 @@
   <section id="start" class="screen">
     <div class="card">
       <h1>Boomtown</h1>
-      <p class="sub">Test build v0.2 &middot; you against computer cities</p>
+      <p class="sub">Test build v0.3 &middot; you against computer cities</p>
       <ul class="how">
         <li><b>Biggest population after 12 minutes wins.</b> Tap an empty lot to build. Tap Housing to build it taller.</li>
         <li><b>Housing needs all four resources,</b> and you're only rich in two. Drag a <b>truck</b> onto a player's circle to fetch theirs, or onto the <b>Countryside</b> circle (slower). If they send one back, it's a <b>trade route</b> and trucks run much faster.</li>
@@ -52,15 +52,8 @@
           <button data-v="3">3</button><button data-v="4" class="on">4</button><button data-v="5">5</button><button data-v="6">6</button>
         </div>
       </div>
-      <div class="field">
-        <span class="label">City view</span>
-        <div class="seg" id="seg-turn">
-          <button data-v="still" class="on">Stays still</button><button data-v="turn">Turns with phone</button>
-        </div>
-      </div>
-      <p class="note" id="turn-note">With "Turns with phone", the map turns to match the room as you turn. On a computer, use Q and E (or the arrow buttons) to pretend.</p>
-      <button id="btn-start" class="primary">Start a game</button>
-      <p class="note" style="margin:10px 0 0">Test build v0.2. <button type="button" id="btn-feedback2" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+      <div class="row-btns" style="margin-top:4px"><button id="btn-start" class="primary">Start a game</button><button class="btn-full" type="button">Full screen</button></div>
+      <p class="note" style="margin:10px 0 0">Test build v0.3. <button type="button" id="btn-feedback2" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
     </div>
   </section>
 
@@ -68,12 +61,6 @@
   <section id="options" class="screen" hidden>
     <div class="card">
       <h2>Paused</h2>
-      <div class="field">
-        <span class="label">City view</span>
-        <div class="seg" id="seg-turn2">
-          <button data-v="still">Stays still</button><button data-v="turn">Turns with phone</button>
-        </div>
-      </div>
       <div class="field">
         <span class="label">Test speed</span>
         <div class="seg" id="seg-speed">
@@ -83,8 +70,9 @@
       <div class="row-btns">
         <button id="btn-resume" class="primary">Keep playing</button>
         <button id="btn-quit">New game</button>
+        <button class="btn-full" type="button">Full screen</button>
       </div>
-      <p class="note" style="margin-top:12px">Test build v0.2. Nothing leaves your device. <button type="button" id="btn-feedback" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+      <p class="note" style="margin-top:12px">Test build v0.3. Nothing leaves your device. <button type="button" id="btn-feedback" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
     </div>
   </section>
 
@@ -100,10 +88,10 @@
 
   <div id="rotate">Turn your phone sideways to play.</div>
 
-  <script src="oh-feedback.js?v=mw6kxk8m"></script>
-  <script src="config.js?v=mw6kxk8m"></script>
-  <script src="sim.js?v=mw6kxk8m"></script>
-  <script src="ai.js?v=mw6kxk8m"></script>
-  <script src="view.js?v=mw6kxk8m"></script>
+  <script src="oh-feedback.js?v=mw6lqqt8"></script>
+  <script src="config.js?v=mw6lqqt8"></script>
+  <script src="sim.js?v=mw6lqqt8"></script>
+  <script src="ai.js?v=mw6lqqt8"></script>
+  <script src="view.js?v=mw6lqqt8"></script>
 </body>
 </html>

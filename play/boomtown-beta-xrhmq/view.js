@@ -14,6 +14,17 @@
   };
   const RCOL = { food: '#7cc24f', steel: '#9fb0c4', fuel: '#ef8f2f', chips: '#56c8e0' };
   BT.RCOL = RCOL;
+  // Little pictures for the four resources: same colors, very simple shapes so they read when tiny (#157).
+  const RSHAPE = {
+    food: '<path d="M8 5.2C5 3.4 2 5 2 9c0 3.6 2.6 6 4 6 .9 0 1.2-.5 2-.5s1.1.5 2 .5c1.4 0 4-2.4 4-6 0-4-3-5.6-6-3.8z"/><path d="M8.2 5c.1-2 1.3-3.4 3.6-3.6-.1 2.1-1.4 3.4-3.6 3.6z"/>',
+    steel: '<path d="M2 2h12v3.2H10v5.6h4V14H2v-3.2h4V5.2H2z"/>',
+    fuel: '<path d="M8 1.2S3 7 3 10.2a5 5 0 0 0 10 0C13 7 8 1.2 8 1.2z"/>',
+    chips: '<rect x="4" y="4" width="8" height="8" rx="1.2"/><path d="M6 1.5v2.5M10 1.5v2.5M6 12v2.5M10 12v2.5M1.5 6h2.5M1.5 10h2.5M12 6h2.5M12 10h2.5" fill="none" stroke="' + '#COL#' + '" stroke-width="1.7" stroke-linecap="round"/>',
+  };
+  const ricon = (r, size = 14) => `<svg class="ricon" width="${size}" height="${size}" viewBox="0 0 16 16" aria-hidden="true" fill="${RCOL[r]}" stroke="rgba(10,25,45,.55)" stroke-width=".7" stroke-linejoin="round">${RSHAPE[r].replace('#COL#', RCOL[r])}</svg>`;
+  BT.ricon = ricon;
+  const iconImgs = {};
+  const iconImg = (r) => iconImgs[r] || (iconImgs[r] = Object.assign(new Image(), { src: 'data:image/svg+xml,' + encodeURIComponent(ricon(r, 32).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')) }));
 
   let g = null, brains = [], me = null;
   let speed = 1, paused = true, turnMode = false, viewAngle = 0, compass0 = null;
@@ -34,8 +45,10 @@
   }
   let players = 4;
   seg('#seg-players', (v) => (players = +v));
-  const setTurn1 = seg('#seg-turn', (v) => setTurnMode(v === 'turn'));
-  const setTurn2 = seg('#seg-turn2', (v) => setTurnMode(v === 'turn'));
+  // The city view stays still (Michael, Nov 7, 2026, #127). Turning with the phone is kept in the code
+  // for a later try: add ?turn to the address.
+  const setTurn1 = () => {}, setTurn2 = () => {};
+  if (new URLSearchParams(location.search).has('turn')) setTimeout(() => setTurnMode(true), 0);
   seg('#seg-speed', (v) => (speed = +v));
   const urlSpeed = +new URLSearchParams(location.search).get('speed'); if (urlSpeed) speed = urlSpeed;
 
@@ -65,14 +78,26 @@
     } else listen();
   }
 
+  // Full screen hides the browser's address bar (Android; iPhones don't allow it for web pages).
+  const canFull = !!(document.documentElement.requestFullscreen);
+  document.querySelectorAll('.btn-full').forEach((b) => {
+    b.hidden = !canFull;
+    b.onclick = async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); try { await screen.orientation.lock('landscape'); } catch (e) {} }
+      } catch (e) { toast("This browser can't go full screen."); }
+    };
+  });
+  document.addEventListener('fullscreenchange', () => { document.querySelectorAll('.btn-full').forEach((b) => (b.textContent = document.fullscreenElement ? 'Leave full screen' : 'Full screen')); setTimeout(resize, 200); });
   $('#btn-start').onclick = () => newGame();
   $('#btn-again').onclick = () => { $('#end').hidden = true; $('#start').hidden = false; };
   $('#btn-options').onclick = () => { paused = true; $('#options').hidden = false; };
   $('#btn-resume').onclick = () => { $('#options').hidden = true; paused = false; };
   $('#btn-quit').onclick = () => { $('#options').hidden = true; $('#start').hidden = false; };
   const feedback = () => {
-    const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}` : 'start screen';
-    OHFeedback.open({ app: 'Boomtown', version: '0.2', where });
+    const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}, screen ${innerWidth}x${innerHeight}` : 'start screen';
+    OHFeedback.open({ app: 'Boomtown', version: '0.3', where });
   };
   $('#btn-feedback').onclick = feedback;
   $('#btn-feedback2').onclick = feedback;
@@ -132,7 +157,7 @@
 
   function costHTML(cost, p) {
     if (!cost) return '';
-    return RES.filter((r) => cost[r]).map((r) => `<span class="${p && p.stock[r] < cost[r] ? 'short' : ''}"><i style="background:${RCOL[r]}"></i>${cost[r]}</span>`).join('');
+    return RES.filter((r) => cost[r]).map((r) => `<span class="${p && p.stock[r] < cost[r] ? 'short' : ''}">${ricon(r, 12)}${cost[r]}</span>`).join('');
   }
 
   function rowHTML(it) {
@@ -148,7 +173,7 @@
   function buildPanels() {
     $('#left').innerHTML = LEFT.map(rowHTML).join('');
     $('#right').innerHTML = RIGHT.map(rowHTML).join('');
-    $('#bottom').innerHTML = RES.map((r) => `<div class="res ${me.rich.includes(r) ? 'rich' : ''}" data-res="${r}"><div class="dot" style="background:${RCOL[r]}"></div><div><div class="v">0</div><div class="r">${C.resourceNames[r]}</div></div></div>`).join('');
+    $('#bottom').innerHTML = RES.map((r) => `<div class="res ${me.rich.includes(r) ? 'rich' : ''}" data-res="${r}">${ricon(r, 20)}<div><div class="v">0</div><div class="r">${C.resourceNames[r]}</div></div></div>`).join('');
 
     document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -274,7 +299,7 @@
     const mine = g.trucksTo(me, q.id), theirs = g.trucksTo(q, me.id), cd = g.cooldownLeft(me, q);
     const brain = brains.find((b) => b.p === q);
     openPopover(e, `<h3>${q.name} &middot; ${ordinal(g.rankOf(q))}</h3>
-      <p>Rich in ${q.rich.map((r) => `<b style="color:${RCOL[r]}">${C.resourceNames[r]}</b>`).join(' and ')}.</p>
+      <p>Rich in ${q.rich.map((r) => `<b style="color:${RCOL[r]}">${ricon(r, 13)} ${C.resourceNames[r]}</b>`).join(' and ')}.</p>
       <p>Your trucks to them: ${mine}. Theirs to you: ${theirs}.${mine && theirs ? ' <b>Trade route:</b> trucks run fast both ways.' : ''}</p>
       ${cd > 0 ? `<p style="color:#ff9d8f">Trade is cut for ${Math.ceil(cd)} more seconds.</p>` : ''}
       <p style="opacity:.65">To send something, drag it from the side onto this circle. In the real game you'd ask ${q.name} out loud for a truck.</p>`,
@@ -350,7 +375,7 @@
   function setMode(m) {
     mode = m; closePopover();
     if (!m) return setHint(null);
-    if (m.kind === 'place') setHint(`Tap the grass round your city to place the ${m.item === 'ag' ? 'ground' : 'air'} turret, on the side your enemies sit.`);
+    if (m.kind === 'place') setHint(`Tap in the yellow ring, on your enemies' side.`);
   }
   function setHint(text) {
     const h = $('#hint');
@@ -465,7 +490,7 @@
     DPR = Math.min(2, window.devicePixelRatio || 1);
     W = window.innerWidth; H = window.innerHeight;
     canvas.width = W * DPR; canvas.height = H * DPR;
-    const lw = $('#left').offsetWidth, rw = $('#right').offsetWidth, th = 40, bh = 52;
+    const lw = $('#left').offsetWidth, rw = $('#right').offsetWidth, th = $('#top').offsetHeight, bh = $('#bottom').offsetHeight;
     // the map fills the whole screen; the side panels float over it
     view.badgeRect = { x: lw, y: th, w: W - lw - rw, h: H - th - bh };
     view.rect = view.badgeRect;
@@ -493,7 +518,7 @@
   function streetSpan(v) { return Math.sqrt(Math.max(0, CITY_R * CITY_R - v * v)); }
   function makeDecor(p) {
     const rnd = seeded(12345 + Math.floor(Math.random() * 1000));
-    const fields = p.rich.map((r, i) => ({ r, ang: p.homeDir + (i ? -0.8 : 0.8), dist: 64 }));
+    const fields = p.rich.map((r, i) => ({ r, ang: p.homeDir + (i ? -0.9 : 0.9), dist: 52 })); // close enough to always be on screen
     const workers = [];
     fields.forEach((f, i) => { for (let k = 0; k < 3; k++) workers.push({ f: i, ph: rnd(), sp: 0.035 + rnd() * 0.02 }); });
     const trees = [];
@@ -501,7 +526,7 @@
       const a = rnd() * Math.PI * 2, r = 46 + rnd() * 90;
       const x = Math.sin(a) * r, y = -Math.cos(a) * r;
       if (Math.abs(x - 6.5) < 6 || Math.abs(y - 6.5) < 6) continue; // keep the highways clear
-      if (fields.some((f) => { const d = BT.dirVec(f.ang); return Math.hypot(x - d.x * f.dist, y - d.y * f.dist) < 18; })) continue;
+      if (fields.some((f) => { const d = BT.dirVec(f.ang); return Math.hypot(x - d.x * f.dist, y - d.y * f.dist) < 16; })) continue;
       trees.push({ x, y, s: 0.8 + rnd() * 0.6, tone: rnd() });
     }
     const cars = [];
@@ -563,6 +588,7 @@
     const items = [];
     me.buildings.forEach((b, i) => items.push({ y: BT.LOTS[i].y, x: BT.LOTS[i].x, f: () => drawBuilding(b, i, now) }));
     items.push({ x: 0, y: 0, f: () => drawHall(now) });
+    for (const f of g.decor.fields) { const d = BT.dirVec(f.ang); items.push({ x: d.x * f.dist, y: d.y * f.dist, f: () => drawFieldSign(f) }); }
     for (const t of g.decor.trees) items.push({ x: t.x, y: t.y, f: () => drawTree(t) });
     for (const t of me.turrets) items.push({ x: t.x, y: t.y, f: () => drawTurret(t) });
     for (const d of me.defenders) items.push({ x: d.x, y: d.y, f: () => drawSoldier(d, me.color, true, now) });
@@ -632,6 +658,15 @@
       if (Math.floor(now / 500) % 2) { ctx.fillStyle = '#d6ffff'; ctx.fillRect(-11 * S, -4 * S, 1.5 * S, 1.5 * S); }
     }
     ctx.restore();
+  }
+  function drawFieldSign(f) {
+    // a little sign on a post with the resource's picture, so it's clear what this field gathers
+    const d = BT.dirVec(f.ang), S = view.S, p = proj(d.x * f.dist, d.y * f.dist);
+    const img = iconImg(f.r), r = Math.min(12, Math.max(8, 3.2 * S)), sy = p.y - 8 * S - r;
+    ctx.strokeStyle = '#5a4630'; ctx.lineWidth = Math.max(1.5, S * 0.5);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, sy); ctx.stroke();
+    ctx.fillStyle = 'rgba(12,28,48,.82)'; ctx.beginPath(); ctx.arc(p.x, sy, r, 0, 7); ctx.fill();
+    if (img.complete) ctx.drawImage(img, p.x - r * 0.72, sy - r * 0.72, r * 1.44, r * 1.44);
   }
 
   function box(p, w, h, front, top, outline) {
