@@ -97,7 +97,7 @@
   $('#btn-quit').onclick = () => { $('#options').hidden = true; $('#start').hidden = false; };
   const feedback = () => {
     const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}, screen ${innerWidth}x${innerHeight}` : 'start screen';
-    OHFeedback.open({ app: 'Boomtown', version: '0.4', where });
+    OHFeedback.open({ app: 'Boomtown', version: '0.4.1', where });
   };
   $('#btn-feedback').onclick = feedback;
   $('#btn-feedback2').onclick = feedback;
