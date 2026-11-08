@@ -148,10 +148,10 @@
   ];
   const UNITS = LEFT.concat(RIGHT);
   const BUILD = [
-    { key: 'housing', name: 'Housing', tip: 'Room for 60 more people' },
-    { key: 'workshop', name: 'Workshop', tip: 'Workers gather 25% faster' },
-    { key: 'depot', name: 'Depot', tip: 'Faster trucks, 2 more trucks' },
-    { key: 'barracks', name: 'Barracks', tip: '2 more defenders, quicker back' },
+    { key: 'housing', name: 'Housing', tip: '+60 population' },
+    { key: 'workshop', name: 'Workshop', tip: '+25% worker speed' },
+    { key: 'depot', name: 'Depot', tip: '+2 trucks, +15% speed' },
+    { key: 'barracks', name: 'Barracks', tip: '+2 defenders, +20% respawn speed' },
   ];
   const UNIT_WORDS = { truck: ['truck', 'trucks'], inf: ['infantry', 'infantry'], tank: ['tank', 'tanks'], bomb: ['bomber', 'bombers'] };
 
