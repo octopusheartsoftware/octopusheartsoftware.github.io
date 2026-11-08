@@ -224,3 +224,18 @@ body.hinting #toasts { bottom: 100px; }
   #popover button .bi svg { width: 20px; height: 20px; }
   #popover button small { font-size: 10.5px; }
 }
+
+/* the road between you and another player: numbers run along it for trucks each way (#170) */
+#popover .lane { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; font-size: 12px; }
+#popover .lane .end { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 38px; max-width: 64px; text-align: center; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+#popover .lane .end i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); }
+#popover .lane .track { position: relative; flex: 1; height: 34px; }
+#popover .lane .track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 3px dashed rgba(255,255,255,.35); transform: translateY(-50%); }
+#popover .lane.route .track::before { border-top: 3px solid #ffd34d; }
+#popover .lane .dot { position: absolute; width: 18px; height: 18px; margin-left: -9px; border-radius: 9px; background: #e5f1f9; color: #0c1820; font-weight: 700; font-size: 11px; line-height: 18px; text-align: center; animation: 2.4s linear infinite; }
+#popover .lane .dot.out { top: -1px; animation-name: lane-out; }
+#popover .lane .dot.in { bottom: -1px; animation-name: lane-in; }
+#popover .lane.route .dot { animation-duration: 1.2s; background: #ffd34d; }
+@keyframes lane-out { 0% { left: 0; opacity: 0; } 10% { opacity: 1; } 88% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+@keyframes lane-in { 0% { left: 100%; opacity: 0; } 10% { opacity: 1; } 88% { opacity: 1; } 100% { left: 0; opacity: 0; } }
+#popover .lane .cut { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #c0392b; color: #fff; border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }

@@ -97,7 +97,7 @@
   $('#btn-quit').onclick = () => { $('#options').hidden = true; $('#start').hidden = false; };
   const feedback = () => {
     const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}, screen ${innerWidth}x${innerHeight}` : 'start screen';
-    OHFeedback.open({ app: 'Boomtown', version: '0.4.2', where });
+    OHFeedback.open({ app: 'Boomtown', version: '0.4.3', where });
   };
   $('#btn-feedback').onclick = feedback;
   $('#btn-feedback2').onclick = feedback;
@@ -293,19 +293,23 @@
 
   function onBadgeTap(e, q) {
     e.stopPropagation();
-    if (q === 'home') {
-      return openPopover(e, `<h3>Countryside</h3><p>Trucks dragged here bring back what you lack, but slowly. Another player is faster, and a trade route (trucks both ways) is fastest.</p>`,
-        [['Bring a truck home', () => res(g.recallTruck(me, 'home')), !g.trucksTo(me, 'home')]]);
-    }
-    const mine = g.trucksTo(me, q.id), theirs = g.trucksTo(q, me.id), cd = g.cooldownLeft(me, q);
-    const brain = brains.find((b) => b.p === q);
-    openPopover(e, `<h3>${q.name} &middot; ${ordinal(g.rankOf(q))}</h3>
-      <p>Rich in ${q.rich.map((r) => `<b style="color:${RCOL[r]}">${ricon(r, 13)} ${C.resourceNames[r]}</b>`).join(' and ')}.</p>
-      <p>Your trucks to them: ${mine}. Theirs to you: ${theirs}.${mine && theirs ? ' <b>Trade route:</b> trucks run fast both ways.' : ''}</p>
-      ${cd > 0 ? `<p style="color:#ff9d8f">Trade is cut for ${Math.ceil(cd)} more seconds.</p>` : ''}
-      <p style="opacity:.65">To send something, drag it from the side onto this circle. In the real game you'd ask ${q.name} out loud for a truck.</p>`,
-      [[`Ask ${q.name} for a truck`, () => { const r = brain.askedForTruck(me); toast(r.say, r.yes ? 'good' : ''); }, false],
-       ['Bring a truck home', () => res(g.recallTruck(me, q.id)), !mine]]);
+    // A small road between you and them: a number runs along it for the trucks going each way (#170).
+    const dest = q === 'home' ? 'home' : q.id;
+    const lane = `<div class="lane"><span class="end"><i style="background:${me.color}"></i>You</span>
+      <div class="track"><span class="dot out" hidden></span><span class="dot in" hidden></span><span class="cut" hidden></span></div>
+      <span class="end"><i style="background:${q === 'home' ? '#6fae4f' : q.color}"></i>${q === 'home' ? 'Country' : q.name}</span></div>`;
+    const head = q === 'home' ? `<h3>Countryside</h3>`
+      : `<h3>${q.name} &middot; ${ordinal(g.rankOf(q))}</h3><p>Rich in ${q.rich.map((r) => `<b style="color:${RCOL[r]}">${ricon(r, 13)} ${C.resourceNames[r]}</b>`).join(' and ')}</p>`;
+    openPopover(e, head + lane, [['Recall one truck', () => res(g.recallTruck(me, dest)), () => !g.trucksTo(me, dest)]], true);
+    popLive = () => {
+      const el = $('#popover .lane'); if (!el) return;
+      const mine = g.trucksTo(me, dest), theirs = q === 'home' ? 0 : g.trucksTo(q, me.id), cd = q === 'home' ? 0 : g.cooldownLeft(me, q);
+      const set = (sel, n) => { const d = el.querySelector(sel); d.hidden = !n; if (n && d.textContent !== String(n)) d.textContent = n; };
+      set('.out', mine); set('.in', theirs);
+      el.classList.toggle('route', !!(mine && theirs));
+      const c = el.querySelector('.cut'); c.hidden = !(cd > 0); if (cd > 0) c.textContent = `Cut ${Math.ceil(cd)}s`;
+    };
+    popLive();
   }
   const res = (r) => { if (!r.ok) toast(r.msg, 'bad'); };
 
@@ -313,7 +317,7 @@
     if (item === 'truck') {
       const r = g.sendTruck(me, q === 'home' ? 'home' : q.id);
       if (!r.ok) return toast(r.msg, 'bad');
-      if (q !== 'home') toast(g.trucksTo(q, me.id) > 0 ? `Trade route with ${q.name}! Trucks run fast both ways.` : `Truck on its way to ${q.name}. Ask them to send one back for a trade route.`, g.trucksTo(q, me.id) > 0 ? 'good' : '');
+      if (q !== 'home') toast(g.trucksTo(q, me.id) > 0 ? `Trade route with ${q.name}! Trucks run fast both ways.` : `Truck on its way to ${q.name}.`, g.trucksTo(q, me.id) > 0 ? 'good' : '');
       return;
     }
     if (q === 'home') return;
@@ -459,7 +463,7 @@
     const p = $('#popover');
     p.classList.toggle('grid', actions.length >= 3);
     p.innerHTML = `<button class="x" data-close aria-label="Close">&times;</button>` + html + (actions.length ? `<div class="acts">${actions.map((a, i) => `<button data-i="${i}">${val(a[0])}</button>`).join('')}</div>` : '');
-    popActions = actions; refreshPopover();
+    popActions = actions; popLive = null; refreshPopover();
     p.hidden = false;
     selLot = e.lot != null ? e.lot : -1;
     const W2 = window.innerWidth, top = $('#top').offsetHeight + 4, bottom = window.innerHeight - $('#bottom').offsetHeight - 4;
@@ -470,15 +474,17 @@
     let y = Math.min(bottom - ph, Math.max(top, e.lot != null ? e.clientY - ph / 2 : e.clientY + 16));
     if (y < 4) y = 4;
     p.style.left = x + 'px'; p.style.top = y + 'px';
-    p.querySelectorAll('[data-i]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); if (!keep) closePopover(); actions[+b.dataset.i][1](); });
+    p.querySelectorAll('[data-i]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); if (!keep) closePopover(); actions[+b.dataset.i][1](); refreshPopover(); });
     p.querySelector('[data-close]').onclick = closePopover;
   }
-  function closePopover() { $('#popover').hidden = true; selLot = -1; popActions = null; }
+  function closePopover() { $('#popover').hidden = true; selLot = -1; popActions = null; popLive = null; }
   // Menu buttons follow your resources while the menu is open: one greys out or lights up the moment you can or can't afford it.
-  let popActions = null;
+  let popActions = null, popLive = null;
   const val = (v) => (typeof v === 'function' ? v() : v);
   function refreshPopover() {
-    if (!popActions || $('#popover').hidden) return;
+    if ($('#popover').hidden) return;
+    if (popLive) popLive();
+    if (!popActions) return;
     $('#popover').querySelectorAll('[data-i]').forEach((btn) => {
       const a = popActions[+btn.dataset.i], off = !!val(a[2]), html = val(a[0]);
       if (btn.disabled !== off) btn.disabled = off;
