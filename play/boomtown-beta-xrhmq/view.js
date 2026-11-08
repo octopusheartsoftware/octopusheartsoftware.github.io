@@ -97,7 +97,7 @@
   $('#btn-quit').onclick = () => { $('#options').hidden = true; $('#start').hidden = false; };
   const feedback = () => {
     const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}, screen ${innerWidth}x${innerHeight}` : 'start screen';
-    OHFeedback.open({ app: 'Boomtown', version: '0.4.1', where });
+    OHFeedback.open({ app: 'Boomtown', version: '0.4.2', where });
   };
   $('#btn-feedback').onclick = feedback;
   $('#btn-feedback2').onclick = feedback;
@@ -188,6 +188,7 @@
   }
 
   function updatePanels() {
+    refreshPopover();
     for (const it of UNITS) {
       const row = document.querySelector(`[data-key="${it.key}"]`);
       let c;
@@ -424,31 +425,31 @@
   function buildPopover(lot) {
     const e = lotAnchor(lot);
     openPopover(e, `<h3>Build here</h3>`, BUILD.map((b) => {
-      const cost = g.costOf(me, b.key);
-      return [`<span class="bi">${ICONS[b.key]}</span><span><b>${b.name}</b> ${costHTML(cost, me)}<br><small>${b.tip}</small></span>`, () => res(g.build(me, b.key, lot)), !g.canAfford(me, cost)];
+      const cost = () => g.costOf(me, b.key);
+      return [() => `<span class="bi">${ICONS[b.key]}</span><span><b>${b.name}</b> ${costHTML(cost(), me)}<br><small>${b.tip}</small></span>`, () => res(g.build(me, b.key, lot)), () => !g.canAfford(me, cost())];
     }));
   }
   function buildingPopover(lot) {
     const e = lotAnchor(lot), b = me.buildings[lot];
     const names = { housing: 'Housing', workshop: 'Workshop', depot: 'Depot', barracks: 'Barracks' };
     if (b.rubble) {
-      const cost = g.rebuildCost(me, lot);
-      return openPopover(e, `<h3>Rubble</h3><p>This ${names[b.type]} was wrecked. Rebuild it for half price.</p>`, [[`Rebuild &nbsp;${costHTML(cost, me)}`, () => res(g.rebuild(me, lot)), !g.canAfford(me, cost)]]);
+      const cost = () => g.rebuildCost(me, lot);
+      return openPopover(e, `<h3>Rubble</h3><p>This ${names[b.type]} was wrecked. Rebuild it for half price.</p>`, [[() => `Rebuild &nbsp;${costHTML(cost(), me)}`, () => res(g.rebuild(me, lot)), () => !g.canAfford(me, cost())]]);
     }
     if (b.type === 'housing') {
-      const cost = g.costOf(me, 'housing');
+      const cost = () => g.costOf(me, 'housing');
       const top = b.level >= C.housingMaxLevel;
       return openPopover(e, `<h3>Housing, level ${b.level}</h3><p>Room for ${C.housingCap * b.level} people.${top ? ' As tall as it gets.' : ' Each level adds room for 60 more.'}</p>`,
-        top ? [] : [[`Build taller &nbsp;${costHTML(cost, me)}`, () => res(g.raise(me, lot)), !g.canAfford(me, cost)]]);
+        top ? [] : [[() => `Build taller &nbsp;${costHTML(cost(), me)}`, () => res(g.raise(me, lot)), () => !g.canAfford(me, cost())]]);
     }
-    openPopover(e, `<h3>${names[b.type]}</h3><p>${BUILD.find((x) => x.key === b.type).tip}.</p>`, []);
+    openPopover(e, `<h3>${names[b.type]}</h3><p>${BUILD.find((x) => x.key === b.type).tip}</p>`, []);
   }
 
   function openUpgrades(e) {
     const rows = Object.entries(C.upgrades).map(([path, u]) => {
-      const cost = g.upgradeCost(me, path);
+      const cost = () => g.upgradeCost(me, path);
       const pips = [0, 1, 2].map((i) => `<i class="${i < me.up[path] ? 'on' : ''}"></i>`).join('');
-      return [`${u.name}<span class="tiers">${pips}</span><br><span class="cost">${cost ? costHTML(cost, me) : 'All done'}</span>`, () => { res(g.upgrade(me, path)); openUpgrades(e); }, !cost || !g.canAfford(me, cost)];
+      return [() => `${u.name}<span class="tiers">${pips}</span><br><span class="cost">${cost() ? costHTML(cost(), me) : 'All done'}</span>`, () => { res(g.upgrade(me, path)); openUpgrades(e); }, () => !cost() || !g.canAfford(me, cost())];
     });
     openPopover(e, `<h3>Upgrades</h3><p>Each tier adds 25%. Unit upgrades help your defenders too.</p>`, rows, true);
   }
@@ -457,7 +458,8 @@
   function openPopover(e, html, actions, keep) {
     const p = $('#popover');
     p.classList.toggle('grid', actions.length >= 3);
-    p.innerHTML = `<button class="x" data-close aria-label="Close">&times;</button>` + html + (actions.length ? `<div class="acts">${actions.map((a, i) => `<button data-i="${i}" ${a[2] ? 'disabled' : ''}>${a[0]}</button>`).join('')}</div>` : '');
+    p.innerHTML = `<button class="x" data-close aria-label="Close">&times;</button>` + html + (actions.length ? `<div class="acts">${actions.map((a, i) => `<button data-i="${i}">${val(a[0])}</button>`).join('')}</div>` : '');
+    popActions = actions; refreshPopover();
     p.hidden = false;
     selLot = e.lot != null ? e.lot : -1;
     const W2 = window.innerWidth, top = $('#top').offsetHeight + 4, bottom = window.innerHeight - $('#bottom').offsetHeight - 4;
@@ -471,7 +473,18 @@
     p.querySelectorAll('[data-i]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); if (!keep) closePopover(); actions[+b.dataset.i][1](); });
     p.querySelector('[data-close]').onclick = closePopover;
   }
-  function closePopover() { $('#popover').hidden = true; selLot = -1; }
+  function closePopover() { $('#popover').hidden = true; selLot = -1; popActions = null; }
+  // Menu buttons follow your resources while the menu is open: one greys out or lights up the moment you can or can't afford it.
+  let popActions = null;
+  const val = (v) => (typeof v === 'function' ? v() : v);
+  function refreshPopover() {
+    if (!popActions || $('#popover').hidden) return;
+    $('#popover').querySelectorAll('[data-i]').forEach((btn) => {
+      const a = popActions[+btn.dataset.i], off = !!val(a[2]), html = val(a[0]);
+      if (btn.disabled !== off) btn.disabled = off;
+      if (btn.dataset.h !== html) { btn.dataset.h = html; btn.innerHTML = html; }
+    });
+  }
 
   // ---------- toasts and events ----------
   function toast(text, kind = '', secs = 3.2) {
