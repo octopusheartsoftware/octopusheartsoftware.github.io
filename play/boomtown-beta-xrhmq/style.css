@@ -239,3 +239,40 @@ body.hinting #toasts { bottom: 100px; }
 @keyframes lane-out { 0% { left: 0; opacity: 0; } 10% { opacity: 1; } 88% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
 @keyframes lane-in { 0% { left: 100%; opacity: 0; } 10% { opacity: 1; } 88% { opacity: 1; } 100% { left: 0; opacity: 0; } }
 #popover .lane .cut { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #c0392b; color: #fff; border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+
+/* v0.5 (#173): resources sit in the top bar; the bottom bar is four build buttons */
+#stock { display: flex; gap: 4px; }
+#stock .res { min-width: 0; padding: 2px 7px 2px 4px; gap: 3px; border-radius: 999px; }
+#stock .res .v { font-size: 15px; min-width: 22px; }
+#stock .res.rich { background: rgba(111, 207, 134, .22); box-shadow: inset 0 0 0 1px rgba(111, 207, 134, .55); }
+#btn-up .short { display: none; }
+#bottom { gap: 6px; }
+.bld { display: flex; align-items: center; gap: 6px; flex: 1 1 0; max-width: 190px; min-width: 0; border: 0; border-radius: 10px; padding: 3px 8px; background: #0b67ad; color: #fff; text-align: left; }
+.bld.no { background: rgba(255,255,255,.1); color: rgba(229,241,249,.6); }
+.bld.rebuild { flex: 0 1 auto; background: #b45309; }
+.bld.rebuild.no { background: rgba(180, 83, 9, .35); }
+.bld .bi { flex: none; width: 26px; height: 26px; }
+.bld .bi svg { width: 26px; height: 26px; }
+.bld .bt { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.bld .bt b { font-family: var(--font-display); font-size: 13px; }
+.bld .cost { font-size: 11px; white-space: nowrap; }
+.bld .cost span { margin-right: 4px; }
+.bld .cost .short { color: #ffb4a8; }
+.bld .full { opacity: .8; }
+.bld:active { transform: translateY(1px); }
+@media (max-width: 720px) {
+  #btn-up .long { display: none; } #btn-up .short { display: inline; }
+  #top { gap: 6px; }
+}
+@media (max-height: 430px) {
+  #stock .res { padding: 1px 5px 1px 3px; }
+  #stock .res .v { font-size: 13px; min-width: 18px; }
+  #stock .res .ricon { width: 14px; height: 14px; }
+  .bld { padding: 2px 5px; gap: 4px; border-radius: 8px; }
+  .bld .bi, .bld .bi svg { width: 20px; height: 20px; }
+  .bld .bt b { font-size: 11.5px; }
+  .bld .cost { font-size: 10px; }
+  .bld .cost span { margin-right: 2px; }
+  .bld .cost .ricon { width: 10px; height: 10px; }
+}
+@media (max-width: 720px) { #bottom.has-rebuild .bld .bi { display: none; } }

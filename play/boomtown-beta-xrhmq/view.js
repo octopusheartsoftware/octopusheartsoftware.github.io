@@ -97,7 +97,7 @@
   $('#btn-quit').onclick = () => { $('#options').hidden = true; $('#start').hidden = false; };
   const feedback = () => {
     const where = g && !g.over ? `${players} players, ${Math.floor(g.timeLeft / 60)}:${String(Math.floor(g.timeLeft % 60)).padStart(2, '0')} left, view ${turnMode ? 'turns' : 'still'}, screen ${innerWidth}x${innerHeight}` : 'start screen';
-    OHFeedback.open({ app: 'Boomtown', version: '0.4.3', where });
+    OHFeedback.open({ app: 'Boomtown', version: '0.5', where });
   };
   $('#btn-feedback').onclick = feedback;
   $('#btn-feedback2').onclick = feedback;
@@ -173,7 +173,17 @@
   function buildPanels() {
     $('#left').innerHTML = LEFT.map(rowHTML).join('');
     $('#right').innerHTML = RIGHT.map(rowHTML).join('');
-    $('#bottom').innerHTML = RES.map((r) => `<div class="res ${me.rich.includes(r) ? 'rich' : ''}" data-res="${r}">${ricon(r, 20)}<div><div class="v">0</div><div class="r">${C.resourceNames[r]}</div></div></div>`).join('');
+    $('#stock').innerHTML = RES.map((r) => `<div class="res ${me.rich.includes(r) ? 'rich' : ''}" data-res="${r}">${ricon(r, 16)}<span class="v">0</span></div>`).join('');
+    // Build buttons: tap one and it goes up on a free block near the middle of your city (#173).
+    $('#bottom').innerHTML = BUILD.map((b) => `<button class="bld" data-build="${b.key}"><span class="bi">${ICONS[b.key]}</span><span class="bt"><b data-bname>${b.name}</b><span class="cost" data-bcost></span></span></button>`).join('')
+      + `<button class="bld rebuild" data-rebuild hidden><span class="bt"><b>Rebuild</b><span class="cost" data-bcost></span></span></button>`;
+    document.querySelectorAll('[data-build]').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); buildNow(btn.dataset.build); }));
+    document.querySelector('[data-rebuild]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const lot = firstRubble(); if (lot < 0) return;
+      const r = g.rebuild(me, lot); if (!r.ok) return toast(r.msg, 'bad');
+      flashLot(lot); updatePanels();
+    });
 
     document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -206,8 +216,21 @@
     for (const r of RES) {
       const el = document.querySelector(`[data-res="${r}"]`);
       el.querySelector('.v').textContent = Math.floor(me.stock[r]);
-      el.querySelector('.r').textContent = C.resourceNames[r] + (me.rich.includes(r) ? ` +${(C.richRate * boost).toFixed(1)}/s` : ' (trade)');
+      el.title = C.resourceNames[r] + (me.rich.includes(r) ? ` +${(C.richRate * boost).toFixed(1)}/s` : ' (trade for it)');
     }
+    // build buttons: the cost, greyed when you can't afford it or there's no room
+    for (const b of BUILD) {
+      const btn = document.querySelector(`[data-build="${b.key}"]`), w = buildWhat(b.key), cost = g.costOf(me, b.key);
+      btn.querySelector('[data-bname]').textContent = w.taller != null ? 'Taller' : b.name;
+      const h = w.full ? '<span class="full">Full</span>' : costHTML(cost, me);
+      if (btn.dataset.h !== h) { btn.dataset.h = h; btn.querySelector('[data-bcost]').innerHTML = h; }
+      btn.classList.toggle('no', !!w.full || !g.canAfford(me, cost));
+      btn.title = w.taller != null ? 'Housing is full: build a block taller (+60 population)' : `${b.name}: ${b.tip}`;
+    }
+    const rb = document.querySelector('[data-rebuild]'), rl = firstRubble();
+    rb.hidden = rl < 0;
+    $('#bottom').classList.toggle('has-rebuild', rl >= 0);
+    if (rl >= 0) { const cost = g.rebuildCost(me, rl), h = costHTML(cost, me); if (rb.dataset.h !== h) { rb.dataset.h = h; rb.querySelector('[data-bcost]').innerHTML = h; } rb.classList.toggle('no', !g.canAfford(me, cost)); }
     const tl = g.timeLeft, m = Math.floor(tl / 60), s = Math.floor(tl % 60);
     $('#clock').textContent = `${m}:${String(s).padStart(2, '0')}`;
     $('#clock').classList.toggle('final', g.finalPush);
@@ -399,9 +422,6 @@
       if (!r.ok) return toast(r.msg, 'bad');
       setMode(null); return;
     }
-    // Press on the city: the block under your finger lights up and follows it; let go to open its menu (#158).
-    pick = { lot: nearestLot(w), id: e.pointerId };
-    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!g) return;
@@ -418,8 +438,30 @@
   };
   canvas.addEventListener('pointerup', (e) => endPick(e, false));
   canvas.addEventListener('pointercancel', (e) => endPick(e, true));
-  let pick = null, hoverLot = -1, selLot = -1;
-  const litLot = () => (pick ? pick.lot : selLot >= 0 ? selLot : hoverLot);
+  let pick = null, hoverLot = -1, selLot = -1, flash = null;
+  // a new building's block glows for a moment so you can see where it went up
+  function flashLot(lot) { flash = { lot, until: performance.now() + 1600 }; }
+  const litLot = () => (flash && performance.now() < flash.until ? flash.lot : -1);
+  const firstRubble = () => me.buildings.findIndex((b) => b && b.rubble);
+  function buildWhat(key) {
+    const free = me.buildings.some((b) => b === null);
+    if (free) return {};
+    if (key === 'housing') {
+      const low = me.buildings.map((b, i) => [b, i]).filter(([b]) => b && b.type === 'housing' && !b.rubble && b.level < C.housingMaxLevel).sort((a, b) => a[0].level - b[0].level)[0];
+      if (low) return { taller: low[1] };
+    }
+    return { full: true };
+  }
+  function buildNow(key) {
+    if (!g || paused) return;
+    const w = buildWhat(key);
+    if (w.full) return toast('Your city is full', 'bad');
+    let lot, r;
+    if (w.taller != null) { lot = w.taller; r = g.raise(me, lot); }
+    else { lot = g.autoLot(me); r = g.build(me, key, lot); }
+    if (!r.ok) return toast(r.msg, 'bad');
+    flashLot(lot); updatePanels();
+  }
   function lotAnchor(lot) { const L = BT.LOTS[lot], q = proj(L.x, L.y); return { clientX: q.x, clientY: q.y, lot }; }
   function nearestLot(w) {
     let best = -1, bd = 6.5;
@@ -514,7 +556,7 @@
       }
       if (e.type === 'truck' && e.to === me.id) toast(g.trucksTo(me, from.id) > 0 ? `${from.name} sent a truck back. Trade route! Trucks run fast both ways.` : `${from.name} sent a truck your way. Send one back for a trade route.`, 'good');
       if (e.type === 'delivery' && e.to === me.id) for (const r in e.load) flashRes(r);
-      if (e.type === 'wrecked' && e.p === me.id) toast(`Your ${e.building} was wrecked. Tap the rubble to rebuild.`, 'bad');
+      if (e.type === 'wrecked' && e.p === me.id) toast(`Your ${e.building} was wrecked. Press Rebuild at the bottom.`, 'bad');
       if (e.type === 'peaceOver') toast('Peace is over. Attacks can be sent now.', 'bad', 4);
       if (e.type === 'final') toast('Final push! Resources come faster and units are cheaper.', 'bad', 5);
       if (e.type === 'over') showEnd();
@@ -542,7 +584,8 @@
     view.rect = view.badgeRect;
     view.cx = W / 2; view.cy = th + (H - th - bh) / 2 + 4;
     // sized so the city fills the space; the turret ring's outer edge may tuck under the bars
-    view.S = Math.min((W - lw - rw) / (2 * 56), (H - th - bh) / (2 * 50 * TILT));
+    // smaller than before (#173): the city sits in the middle with room around it to see the turret ring and the world beyond
+    view.S = Math.min((W - lw - rw) / (2 * 92), (H - th - bh) / (2 * 80 * TILT));
   }
   window.addEventListener('resize', () => { resize(); if (g) updateBadges(); });
 
@@ -570,8 +613,8 @@
     const workers = [];
     fields.forEach((f, i) => { for (let k = 0; k < 3; k++) workers.push({ f: i, ph: rnd(), sp: 0.035 + rnd() * 0.02 }); });
     const trees = [];
-    for (let k = 0; k < 140; k++) {
-      const a = rnd() * Math.PI * 2, r = 46 + rnd() * 90;
+    for (let k = 0; k < 300; k++) {
+      const a = rnd() * Math.PI * 2, r = 46 + rnd() * 170;
       const x = Math.sin(a) * r, y = -Math.cos(a) * r;
       if (Math.abs(x - 6.5) < 6 || Math.abs(y - 6.5) < 6) continue; // keep the highways clear
       if (Math.max(Math.abs(x), Math.abs(y)) < CITY_H + 4) continue; // and the city
@@ -661,7 +704,7 @@
     for (const [px, py] of PARKS) for (const [dx, dy, sc] of [[-2, -1.5, 0.8], [2, 1.5, 0.95]]) items.push({ x: px + dx, y: py + dy, f: () => drawTree({ x: px + dx, y: py + dy, s: sc, tone: 0.4 }) });
     const lit = litLot();
     if (lit >= 0) {
-      // the picked block: a yellow outline that grows a little and pulses, drawn under and again over the building
+      // a new building's block: a yellow outline that pulses, drawn under and again over the building
       const k = 1.12 + Math.sin(now / 160) * 0.05;
       lotOutline(lit, k, 'rgba(255,211,77,.95)', Math.max(2, view.S * 0.45), 'rgba(255,211,77,.28)');
       const L = BT.LOTS[lit];

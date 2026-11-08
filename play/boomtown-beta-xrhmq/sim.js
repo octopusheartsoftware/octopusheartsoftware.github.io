@@ -136,8 +136,16 @@
       return { ok: true };
     }
 
+    // The free block a new building goes on: one of the free blocks nearest the center, picked at random, so a city grows outward (#173).
+    autoLot(p) {
+      const free = LOTS.map((L, i) => i).filter((i) => p.buildings[i] === null);
+      if (!free.length) return -1;
+      const d0 = Math.hypot(LOTS[free[0]].x, LOTS[free[0]].y);
+      const ring = free.filter((i) => Math.hypot(LOTS[i].x, LOTS[i].y) < d0 + 0.5);
+      return ring[Math.floor(Math.random() * ring.length)];
+    }
     build(p, type, lot) {
-      if (lot == null) lot = p.buildings.findIndex((b) => b === null);
+      if (lot == null) lot = this.autoLot(p);
       if (lot < 0 || p.buildings[lot]) return { ok: false, msg: 'No room left to build' };
       const cost = this.costOf(p, type);
       if (!this.canAfford(p, cost)) return { ok: false, msg: 'Not enough ' + this.missing(p, cost).map((r) => C.resourceNames[r]).join(' and ') };

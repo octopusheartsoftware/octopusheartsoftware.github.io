@@ -6,8 +6,8 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Boomtown (test)</title>
   <link rel="icon" href="favicon.svg">
-  <link rel="stylesheet" href="brand.css?v=mw7ytk1z">
-  <link rel="stylesheet" href="style.css?v=mw7ytk1z">
+  <link rel="stylesheet" href="brand.css?v=mw7zh55j">
+  <link rel="stylesheet" href="style.css?v=mw7zh55j">
 </head>
 <body>
   <div id="game">
@@ -19,7 +19,8 @@
       <div id="phase" class="chip">Peace</div>
       <div id="me"></div>
       <div class="spacer"></div>
-      <button id="btn-up" class="chip-btn" aria-label="Upgrades">Upgrades</button>
+      <div id="stock" aria-label="Resources"></div>
+      <button id="btn-up" class="chip-btn" aria-label="Upgrades"><span class="long">Upgrades</span><span class="short">&#x2B06;</span></button>
       <button id="btn-turn-l" class="icon-btn turn-btn" title="Turn left (Q)" aria-label="Turn left">&#x27F2;</button>
       <button id="btn-turn-r" class="icon-btn turn-btn" title="Turn right (E)" aria-label="Turn right">&#x27F3;</button>
       <button id="btn-options" class="icon-btn" aria-label="Options and pause">II</button>
@@ -27,7 +28,7 @@
 
     <aside id="left" aria-label="Your trucks and defenses"></aside>
     <aside id="right" aria-label="Your army"></aside>
-    <footer id="bottom" aria-label="Resources"></footer>
+    <footer id="bottom" aria-label="Build"></footer>
 
     <div id="hint" hidden></div>
     <div id="toasts" aria-live="polite"></div>
@@ -39,9 +40,9 @@
   <section id="start" class="screen">
     <div class="card">
       <h1>Boomtown</h1>
-      <p class="sub">Test build v0.4.3 &middot; you against computer cities</p>
+      <p class="sub">Test build v0.5 &middot; you against computer cities</p>
       <ul class="how">
-        <li><b>Biggest population after 12 minutes wins.</b> Tap an empty lot to build. Tap Housing to build it taller.</li>
+        <li><b>Biggest population after 12 minutes wins.</b> Tap a building at the bottom to build it; your city grows outward from the middle. When the city is full, Housing builds taller.</li>
         <li><b>Housing needs all four resources,</b> and you're only rich in two. Drag a <b>truck</b> onto a player's circle to fetch theirs, or onto the <b>Countryside</b> circle (slower). If they send one back, it's a <b>trade route</b> and trucks run much faster.</li>
         <li><b>Drag soldiers, tanks or bombers onto a player's circle</b> to send them all (let go anywhere else to cancel). Any attack cuts trade between you two for a while. No attacks in the first 2 minutes.</li>
         <li>Put <b>turrets</b> on the side your enemies sit. Your own defenders always fight back.</li>
@@ -53,7 +54,7 @@
         </div>
       </div>
       <div class="row-btns" style="margin-top:4px"><button id="btn-start" class="primary">Start a game</button><button class="btn-full" type="button">Full screen</button></div>
-      <p class="note" style="margin:10px 0 0">Test build v0.4.3. <button type="button" id="btn-feedback2" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+      <p class="note" style="margin:10px 0 0">Test build v0.5. <button type="button" id="btn-feedback2" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
     </div>
   </section>
 
@@ -72,7 +73,7 @@
         <button id="btn-quit">New game</button>
         <button class="btn-full" type="button">Full screen</button>
       </div>
-      <p class="note" style="margin-top:12px">Test build v0.4.3. Nothing leaves your device. <button type="button" id="btn-feedback" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+      <p class="note" style="margin-top:12px">Test build v0.5. Nothing leaves your device. <button type="button" id="btn-feedback" class="link-btn">Send feedback</button> &middot; <a href="https://octopusheartsoftware.com/privacy.html" target="_blank" rel="noopener">Privacy</a></p>
     </div>
   </section>
 
@@ -88,10 +89,10 @@
 
   <div id="rotate">Turn your phone sideways to play.</div>
 
-  <script src="oh-feedback.js?v=mw7ytk1z"></script>
-  <script src="config.js?v=mw7ytk1z"></script>
-  <script src="sim.js?v=mw7ytk1z"></script>
-  <script src="ai.js?v=mw7ytk1z"></script>
-  <script src="view.js?v=mw7ytk1z"></script>
+  <script src="oh-feedback.js?v=mw7zh55j"></script>
+  <script src="config.js?v=mw7zh55j"></script>
+  <script src="sim.js?v=mw7zh55j"></script>
+  <script src="ai.js?v=mw7zh55j"></script>
+  <script src="view.js?v=mw7zh55j"></script>
 </body>
 </html>
