@@ -17,9 +17,8 @@
   // Settings are remembered per browser. ?sound=off (the teacher link) starts silent without saving.
   const settings = { music: true, sfx: true };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('cc-sound') || '{}')); } catch (e) { /* storage blocked */ }
-  // A class code also starts silent, so a room full of laptops stays quiet. Choices made then aren't saved.
   const q = new URLSearchParams(location.search);
-  const temporary = q.get('sound') === 'off' || !!q.get('code');
+  const temporary = q.get('sound') === 'off'; // class codes (teacher mode) are switched off for now
   if (temporary) { settings.music = false; settings.sfx = false; }
   const save = () => { if (temporary) return; try { localStorage.setItem('cc-sound', JSON.stringify(settings)); } catch (e) { /* storage blocked */ } };
 

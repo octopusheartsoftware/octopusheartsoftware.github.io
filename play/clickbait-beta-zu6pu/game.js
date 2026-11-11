@@ -12,7 +12,10 @@
   const params = new URLSearchParams(location.search);
   const SPEED = +params.get('speed') || 1; // ?speed=4 fast-forwards for testing
   const normCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-  const CODE = normCode(params.get('code'));
+  // Teacher mode (class codes, semester length, weekly pauses) is switched off for now (Michael, Nov 10, 2026):
+  // its screens stay in the code below, so setting this to true brings it all back.
+  const TEACHER_MODE = false;
+  const CODE = TEACHER_MODE ? normCode(params.get('code')) : '';
   // Teacher settings ride at the end of the class code, so typed codes carry them too:
   // "SOGGY-PRETZEL-42-20MIN-WEEKLY" = a 20-minute semester that pauses after each week.
   // A longer semester slows every clock, deadline and reply window evenly. The words before the
@@ -996,7 +999,8 @@
       <button class="btn" data-act="start">Skip the tour</button></p>
       <p><button class="btn snd-btn" data-act="sound" data-arg="music"></button> <button class="btn snd-btn" data-act="sound" data-arg="sfx"></button>
       <button class="btn" data-act="feedback">💬 Send feedback</button></p>
-      <p class="small"><button class="linkbtn light" data-act="teacher">For teachers: get a class code</button> · <button class="linkbtn light" data-act="join">Have a class code?</button></p>
+      <p class="small">${TEACHER_MODE ? '<button class="linkbtn light" data-act="teacher">For teachers: get a class code</button> · <button class="linkbtn light" data-act="join">Have a class code?</button>'
+        : 'For teachers: <a class="light" href="teachers/" target="_blank" rel="noopener">lesson guide</a> · <a class="light" href="teachers/handouts.html" target="_blank" rel="noopener">handouts</a>'}</p>
       <p class="small">Version ${cfg.version} · a ${cfg.weeks}-week semester, about ${Math.round(cfg.weeks * cfg.weekSeconds * PACE / 60)} minutes · Thank you for testing!</p>
       <p class="credit">An Octopus Heart Software game · Music made with Suno · <button class="linkbtn light" data-act="privacy">Privacy</button></p></div>`);
     renderSoundBtns();
